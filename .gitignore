@@ -7,3 +7,6 @@ logs/*.log
 __pycache__/
 .env
 
+# Personal files
+agent/
+cofres/
