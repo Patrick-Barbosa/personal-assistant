@@ -1,0 +1,35 @@
+[project]
+name = "personal-assistant"
+version = "0.1.0"
+description = "Second Brain / Assistente Conversacional Generalista - cofre Markdown local com agente LLM"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "python-frontmatter>=1.0.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0",
+    # Sprint 02
+    "fastembed>=0.3.0",
+    # Sprint 03
+    "openai>=1.0.0",
+    "groq>=0.11.0",
+    "sounddevice>=0.4.6",
+    "numpy>=1.24",
+    # Sprint 05
+    "PySide6>=6.6",
+    "pynput>=1.7.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["scripts/testes"]
+pythonpath = ["."]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

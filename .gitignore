@@ -1,0 +1,9 @@
+﻿# logs
+logs/*.log
+!logs/.gitkeep
+
+# venv
+.venv/
+__pycache__/
+.env
+
