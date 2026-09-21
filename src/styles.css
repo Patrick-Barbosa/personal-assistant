@@ -1,0 +1,189 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-app: #14151a;
+    --bg-card: #1c1d24;
+    --bg-input: #191a20;
+    --border-subtle: #282a36;
+    --text-primary: #f3f4f6;
+    --text-muted: #9ca3af;
+  }
+
+  html.dark, .dark {
+    --bg-app: #14151a;
+    --bg-card: #1c1d24;
+    --bg-input: #191a20;
+    --border-subtle: #282a36;
+    --text-primary: #f3f4f6;
+    --text-muted: #9ca3af;
+    color-scheme: dark;
+  }
+
+  html.light, .light {
+    --bg-app: #f3f4f7;
+    --bg-card: #ffffff;
+    --bg-input: #ffffff;
+    --border-subtle: #e2e4e8;
+    --text-primary: #16181d;
+    --text-muted: #596072;
+    color-scheme: light;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body, #root {
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: transparent !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--text-primary);
+  }
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Custom modern scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Markdown typography enhancements */
+.markdown-body {
+  line-height: 1.6;
+}
+.markdown-body p {
+  margin-bottom: 0.65rem;
+}
+.markdown-body p:last-child {
+  margin-bottom: 0;
+}
+.markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
+  font-weight: 600;
+  color: #f3f4f6;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+.markdown-body h1 { font-size: 1.35rem; }
+.markdown-body h2 { font-size: 1.15rem; }
+.markdown-body h3 { font-size: 1.05rem; }
+.markdown-body ul, .markdown-body ol {
+  margin-left: 1.25rem;
+  margin-bottom: 0.65rem;
+}
+.markdown-body ul { list-style-type: disc; }
+.markdown-body ol { list-style-type: decimal; }
+.markdown-body li {
+  margin-bottom: 0.25rem;
+}
+.markdown-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.3rem;
+  font-size: 0.875em;
+  color: var(--text-primary);
+}
+.markdown-body pre {
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  overflow-x: auto;
+  margin-top: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.markdown-body pre code {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.85em;
+  color: var(--text-primary);
+}
+.markdown-body blockquote {
+  border-left: 3px solid #f59e0b;
+  padding-left: 0.75rem;
+  color: var(--text-muted);
+  margin: 0.5rem 0;
+}
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.65rem 0;
+  font-size: 0.875rem;
+}
+.markdown-body th, .markdown-body td {
+  border: 1px solid var(--border-subtle);
+  padding: 0.4rem 0.65rem;
+  text-align: left;
+}
+.markdown-body th {
+  background: rgba(245, 158, 11, 0.06);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.markdown-body a {
+  color: #f59e0b;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s ease;
+}
+.markdown-body a:hover {
+  color: #fbbf24;
+}
+
+/* --- COPERNICO BRANDING & EXCALIFONT --- */
+@font-face { font-family: Excalifont; src: url(data:font/woff2;base64,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); }
+
+/* Dynamic styling for Copernico Excalidraw SVGs */
+svg.copernico-sun [stroke="#1e1e1e"],
+svg.copernico-wordmark [stroke="#1e1e1e"],
+svg.copernico-squircle [stroke="#1e1e1e"] {
+  stroke: #ffffff;
+}
+
+svg.copernico-wordmark [fill="#1e1e1e"] {
+  fill: #f3f4f6;
+}
+
+/* Light mode overrides */
+.light svg.copernico-sun [stroke="#1e1e1e"],
+.light svg.copernico-wordmark [stroke="#1e1e1e"],
+.light svg.copernico-squircle [stroke="#1e1e1e"] {
+  stroke: #1e1e1e;
+}
+
+.light svg.copernico-wordmark [fill="#1e1e1e"] {
+  fill: #16181d;
+}
+
+/* Breathing animation for the 5cm voice orb (Sol Heliocêntrico) */
+@keyframes orb-breathing {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+.orb-breathing {
+  animation: orb-breathing 3.2s ease-in-out infinite;
+  transform-origin: center center;
+}

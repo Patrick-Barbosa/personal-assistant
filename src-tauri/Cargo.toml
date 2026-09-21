@@ -1,0 +1,62 @@
+[package]
+name = "copernico-app"
+version = "0.1.0"
+description = "Copernico - Second Brain Personal Assistant"
+authors = ["Copernico Team"]
+edition = "2021"
+
+[lib]
+name = "copernico_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-global-shortcut = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+thiserror = "2"
+async-trait = "0.1"
+r2d2 = "0.8"
+r2d2_sqlite = { version = "0.35", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled", "blob"] }
+reqwest = { version = "0.12", features = ["json", "stream", "multipart"] }
+tokio = { version = "1", features = ["full"] }
+futures-util = "0.3"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+walkdir = "2"
+tempfile = "3"
+sha2 = "0.10"
+regex = "1"
+fastembed = "6"
+dotenvy = "0.15"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+base64 = "0.22"
+hound = "3.5.1"
+msedge-tts = { version = "0.4.0", default-features = false, features = ["tokio-runtime"] }
+rodio = { version = "0.19", default-features = false, features = ["symphonia-mp3"] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+resvg = "0.45"
+tiny-skia = "0.11"
+usvg = "0.45"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+] }
+
+[profile.dev]
+debug = 1
+
+[profile.test]
+debug = 1

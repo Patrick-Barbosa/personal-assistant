@@ -1,0 +1,13 @@
+plugin:
+  id: minimal-light
+  name: Minimal Paper & Ink
+  version: "1.0.0"
+  author: Copernico Team
+  description: >
+    Tema claro monocromático e focado em legibilidade, estilo papel marfim e tinta carvão.
+
+provides:
+  type: theme
+
+theme:
+  file: theme.css

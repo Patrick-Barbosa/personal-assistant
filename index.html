@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Copernico</title>
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('copernico-theme');
+          var theme = (saved === 'light') ? 'light' : 'dark';
+          document.documentElement.classList.remove('light', 'dark');
+          document.documentElement.classList.add(theme);
+        } catch(e) {}
+      })();
+    </script>
+  </head>
+  <body class="bg-transparent m-0 p-0 overflow-hidden select-none text-[var(--text-primary)] antialiased font-sans">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

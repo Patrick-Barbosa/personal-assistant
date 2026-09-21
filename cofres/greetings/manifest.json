@@ -1,0 +1,182 @@
+[
+  {
+    "id": "gen_cacdfaea",
+    "kind": "generic",
+    "topic": null,
+    "text": "Oi Patrick, estou te ouvindo. Do que precisa hoje?",
+    "file": "gen_cacdfaea.mp3",
+    "created_at": "2026-09-11T15:43:59.148019900-03:00",
+    "last_used": "2026-09-18T15:46:48.311377300-03:00",
+    "ref_time": null
+  },
+  {
+    "id": "gen_b9236ac9",
+    "kind": "generic",
+    "topic": null,
+    "text": "Fala Patrick, pode falar, estou aqui.",
+    "file": "gen_b9236ac9.mp3",
+    "created_at": "2026-09-11T15:44:00.848251100-03:00",
+    "last_used": "2026-09-18T12:43:06.055801500-03:00",
+    "ref_time": null
+  },
+  {
+    "id": "gen_390156e8",
+    "kind": "generic",
+    "topic": null,
+    "text": "Oi, estou aqui. O que você precisa?",
+    "file": "gen_390156e8.mp3",
+    "created_at": "2026-09-11T15:44:03.367615100-03:00",
+    "last_used": "2026-09-19T16:20:44.641666200-03:00",
+    "ref_time": null
+  },
+  {
+    "id": "gen_b481bf19",
+    "kind": "generic",
+    "topic": null,
+    "text": "Patrick, te ouço. Manda ver.",
+    "file": "gen_b481bf19.mp3",
+    "created_at": "2026-09-11T15:44:05.210262300-03:00",
+    "last_used": "2026-09-18T15:31:18.873115600-03:00",
+    "ref_time": null
+  },
+  {
+    "id": "gen_98ff948b",
+    "kind": "generic",
+    "topic": null,
+    "text": "Oi Patrick, pronto para ajudar. Por onde começamos?",
+    "file": "gen_98ff948b.mp3",
+    "created_at": "2026-09-11T15:44:07.859935700-03:00",
+    "last_used": "2026-09-16T21:11:30.755386500-03:00",
+    "ref_time": null
+  },
+  {
+    "id": "gen_77c1c415",
+    "kind": "generic",
+    "topic": null,
+    "text": "Olá Patrick, estou te ouvindo com atenção.",
+    "file": "gen_77c1c415.mp3",
+    "created_at": "2026-09-13T18:26:54.520730900-03:00",
+    "last_used": "2026-09-16T21:00:37.390865900-03:00",
+    "ref_time": null
+  },
+  {
+    "id": "gen_b445f7aa",
+    "kind": "generic",
+    "topic": null,
+    "text": "Oi Patrick, estou por aqui. O que vamos resolver?",
+    "file": "gen_b445f7aa.mp3",
+    "created_at": "2026-09-13T18:26:56.863998900-03:00",
+    "last_used": "2026-09-17T22:45:13.558654600-03:00",
+    "ref_time": null
+  },
+  {
+    "id": "gen_0fde139a",
+    "kind": "generic",
+    "topic": null,
+    "text": "Pode falar Patrick, estou te ouvindo.",
+    "file": "gen_0fde139a.mp3",
+    "created_at": "2026-09-13T18:26:58.319483900-03:00",
+    "last_used": "2026-09-17T21:42:58.269158-03:00",
+    "ref_time": null
+  },
+  {
+    "id": "gen_a4e8f594",
+    "kind": "generic",
+    "topic": null,
+    "text": "Oi Patrick, fala que eu te escuto. O que precisa?",
+    "file": "gen_a4e8f594.mp3",
+    "created_at": "2026-09-13T18:27:00.371564100-03:00",
+    "last_used": "2026-09-17T20:26:28.014635900-03:00",
+    "ref_time": null
+  },
+  {
+    "id": "gen_1a1e4533",
+    "kind": "generic",
+    "topic": null,
+    "text": "Opa Patrick, estou na escuta. Manda aí.",
+    "file": "gen_1a1e4533.mp3",
+    "created_at": "2026-09-13T18:27:02.311859300-03:00",
+    "last_used": "2026-09-18T15:12:22.462479-03:00",
+    "ref_time": null
+  },
+  {
+    "id": "gen_4e09ce5f",
+    "kind": "generic",
+    "topic": null,
+    "text": "Oi Patrick, pronto. O que você quer fazer agora?",
+    "file": "gen_4e09ce5f.mp3",
+    "created_at": "2026-09-13T18:27:04.209194500-03:00",
+    "last_used": "2026-09-18T09:57:44.167125900-03:00",
+    "ref_time": null
+  },
+  {
+    "id": "gen_a76f80a5",
+    "kind": "generic",
+    "topic": null,
+    "text": "Diga Patrick, estou te ouvindo.",
+    "file": "gen_a76f80a5.mp3",
+    "created_at": "2026-09-13T18:27:06.223175-03:00",
+    "last_used": "2026-09-16T15:05:55.763237700-03:00",
+    "ref_time": null
+  },
+  {
+    "id": "gen_e1bc30b8",
+    "kind": "generic",
+    "topic": null,
+    "text": "Oi Patrick, bora lá. No que posso ajudar?",
+    "file": "gen_e1bc30b8.mp3",
+    "created_at": "2026-09-13T18:27:08.225153100-03:00",
+    "last_used": "2026-09-17T22:13:30.398119300-03:00",
+    "ref_time": null
+  },
+  {
+    "id": "gen_04d27111",
+    "kind": "generic",
+    "topic": null,
+    "text": "Estou aqui Patrick. Pode falar sem pressa.",
+    "file": "gen_04d27111.mp3",
+    "created_at": "2026-09-13T18:27:11.100012300-03:00",
+    "last_used": "2026-09-17T22:20:02.943909700-03:00",
+    "ref_time": null
+  },
+  {
+    "id": "gen_9c39b919",
+    "kind": "generic",
+    "topic": null,
+    "text": "Oi Patrick, te escuto. Qual é a missão de agora?",
+    "file": "gen_9c39b919.mp3",
+    "created_at": "2026-09-13T18:27:13.439953300-03:00",
+    "last_used": "2026-09-17T21:06:15.296361600-03:00",
+    "ref_time": null
+  },
+  {
+    "id": "gen_ac5a12fa",
+    "kind": "generic",
+    "topic": null,
+    "text": "Fala Patrick, o que vamos fazer juntos hoje?",
+    "file": "gen_ac5a12fa.mp3",
+    "created_at": "2026-09-13T18:27:15.864979400-03:00",
+    "last_used": "2026-09-17T15:28:05.321050-03:00",
+    "ref_time": null
+  },
+  {
+    "id": "gen_460812d9",
+    "kind": "generic",
+    "topic": null,
+    "text": "Oi Patrick, estou ligado e te ouvindo. Qual o plano?",
+    "file": "gen_460812d9.mp3",
+    "created_at": "2026-09-13T18:27:17.510685700-03:00",
+    "last_used": "2026-09-17T21:43:38.261542800-03:00",
+    "ref_time": null
+  },
+  {
+    "id": "gen_b1fa599d",
+    "kind": "generic",
+    "topic": null,
+    "text": "Oi Patrick, conta comigo. O que precisa?",
+    "file": "gen_b1fa599d.mp3",
+    "created_at": "2026-09-13T18:27:19.756177700-03:00",
+    "last_used": "2026-09-17T17:15:21.947951800-03:00",
+    "ref_time": null
+  }
+]

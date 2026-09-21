@@ -1,0 +1,42 @@
+/* ==========================================================================
+   Tema Copernico: Cyberpunk Neon (CSS Livre)
+   ========================================================================== */
+
+:root, :root.dark {
+  --bg-app: #080711 !important;
+  --bg-card: #100e24 !important;
+  --bg-input: #15122e !important;
+  --border-subtle: #2d2657 !important;
+  --text-primary: #e6e6fa !important;
+  --text-muted: #8b88b6 !important;
+}
+
+/* Acentos em Ciano e Magenta Elétrico */
+.text-amber-500, .text-amber-400 {
+  color: #00ffff !important;
+}
+
+.bg-amber-500 {
+  background-color: #00e5ff !important;
+  box-shadow: 0 0 15px rgba(0, 229, 255, 0.4) !important;
+}
+
+.border-amber-500 {
+  border-color: #00ffff !important;
+}
+
+/* Balões de Mensagem com Efeito Neon */
+.bg-amber-500\/10 {
+  background-color: rgba(0, 255, 255, 0.08) !important;
+  border-color: rgba(0, 255, 255, 0.25) !important;
+}
+
+.bg-amber-500\/20 {
+  background-color: rgba(0, 255, 255, 0.15) !important;
+}
+
+/* Destaque suave em títulos e seleções */
+::selection {
+  background: #ff007f !important;
+  color: #ffffff !important;
+}

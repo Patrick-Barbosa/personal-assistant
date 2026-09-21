@@ -1,0 +1,25 @@
+/* ==========================================================================
+   Tema Copernico: Minimal Paper & Ink (CSS Livre)
+   ========================================================================== */
+
+:root, :root.dark {
+  --bg-app: #f9f8f4 !important;
+  --bg-card: #ffffff !important;
+  --bg-input: #f3f1ea !important;
+  --border-subtle: #ded9cd !important;
+  --text-primary: #1f2022 !important;
+  --text-muted: #6b6a65 !important;
+}
+
+.text-amber-500, .text-amber-400 {
+  color: #2b2b2b !important;
+}
+
+.bg-amber-500 {
+  background-color: #242528 !important;
+  color: #ffffff !important;
+}
+
+.border-amber-500 {
+  border-color: #242528 !important;
+}
