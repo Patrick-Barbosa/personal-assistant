@@ -1,4 +1,4 @@
-import type { Board, Column, Message, Session, Task } from "./types";
+import type { Board, Column, DailyNote, Habit, Hoje, Message, Session, Task } from "./types";
 
 const BASE = "http://127.0.0.1:8000";
 
@@ -41,4 +41,14 @@ export const api = {
   updateTask: (id: string, patch: { titulo?: string; day_label?: string | null; note_md?: string; habit_id?: string | null }) =>
     request<Task>("PATCH", `/api/tasks/${id}`, patch),
   deleteTask: (id: string) => request<{ ok: boolean }>("DELETE", `/api/tasks/${id}`),
+
+  listHabits: (data?: string) => request<Habit[]>("GET", data ? `/api/habits?data=${data}` : "/api/habits"),
+  createHabit: (nome: string, tipo: "binary" | "numeric" = "binary", unidade = "") =>
+    request<Habit>("POST", "/api/habits", { nome, tipo, unidade }),
+  deleteHabit: (id: string) => request<{ ok: boolean }>("DELETE", `/api/habits/${id}`),
+  checkHabit: (id: string, valor: number, data?: string) =>
+    request<Habit>("POST", `/api/habits/${id}/check`, { valor, data }),
+  getHoje: (data?: string) => request<Hoje>("GET", data ? `/api/hoje?data=${data}` : "/api/hoje"),
+  saveNota: (conteudo: string, data?: string) =>
+    request<DailyNote>("POST", "/api/hoje/nota", { conteudo, data }),
 };

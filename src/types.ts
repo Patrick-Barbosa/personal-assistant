@@ -39,3 +39,25 @@ export type Board = Record<Column, Task[]>;
 
 export const DAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"] as const;
 export type DayLabel = (typeof DAY_LABELS)[number];
+
+export interface Habit {
+  id: string;
+  nome: string;
+  tipo: "binary" | "numeric";
+  unidade: string;
+  valor: number;
+  created_at: string;
+}
+
+export interface DailyNote {
+  data: string;
+  conteudo: string;
+  updated_at: string;
+}
+
+export interface Hoje {
+  data: string;
+  habits: Habit[];
+  doing: Task[];
+  nota: DailyNote | null;
+}

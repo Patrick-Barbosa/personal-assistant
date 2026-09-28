@@ -3,13 +3,14 @@ import { api } from "./api";
 import type { Board, Session } from "./types";
 import BoardView from "./components/BoardView";
 import ChatView from "./components/ChatView";
+import HojeView from "./components/HojeView";
 
-type View = "chat" | "board";
+type View = "hoje" | "chat" | "board";
 
 const EMPTY_BOARD: Board = { todo: [], doing: [], done: [] };
 
 export default function App() {
-  const [view, setView] = useState<View>("chat");
+  const [view, setView] = useState<View>("hoje");
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [board, setBoard] = useState<Board>(EMPTY_BOARD);
@@ -52,6 +53,14 @@ export default function App() {
       <aside className="flex w-60 flex-col border-r border-zinc-800">
         <div className="flex gap-2 p-3">
           <button
+            onClick={() => setView("hoje")}
+            className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold ${
+              view === "hoje" ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400"
+            }`}
+          >
+            Hoje
+          </button>
+          <button
             onClick={() => setView("chat")}
             className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold ${
               view === "chat" ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400"
@@ -65,7 +74,7 @@ export default function App() {
               view === "board" ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400"
             }`}
           >
-            Quadro
+            Semana
           </button>
         </div>
 
@@ -105,7 +114,9 @@ export default function App() {
       </aside>
 
       <main className="flex-1 overflow-hidden">
-        {view === "chat" ? (
+        {view === "hoje" ? (
+          <HojeView onTasksChanged={refreshBoard} />
+        ) : view === "chat" ? (
           activeId ? (
             <ChatView key={activeId} sessionId={activeId} />
           ) : (

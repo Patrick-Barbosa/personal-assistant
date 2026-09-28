@@ -12,7 +12,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import agent, config, db, kanban
+from . import agent, config, db, habits, kanban
 
 
 def now_iso() -> str:
@@ -77,6 +77,12 @@ class Handler(BaseHTTPRequestHandler):
                 return send_json(self, 200, [message_to_dict(r) for r in rows])
             if path == "/api/board":
                 return send_json(self, 200, kanban.list_board(conn))
+            if path == "/api/habits":
+                qs = parse_qs(url.query)
+                return send_json(self, 200, habits.list_habits(conn, (qs.get("data") or [""])[0]))
+            if path == "/api/hoje":
+                qs = parse_qs(url.query)
+                return send_json(self, 200, habits.get_hoje(conn, (qs.get("data") or [""])[0]))
             return send_json(self, 404, {"error": f"GET desconhecido: {path}"})
         finally:
             conn.close()
@@ -131,6 +137,26 @@ class Handler(BaseHTTPRequestHandler):
                     return send_json(self, 200, kanban.move_task(conn, m.group(1), body.get("column", "todo"), int(body.get("index") or 0)))
                 except (ValueError, LookupError) as e:
                     return send_json(self, 400, {"error": str(e)})
+            if path == "/api/habits":
+                body = read_json(self)
+                try:
+                    h = habits.create_habit(conn, body.get("nome", ""), body.get("tipo") or "binary", body.get("unidade") or "")
+                    return send_json(self, 201, h)
+                except ValueError as e:
+                    return send_json(self, 400, {"error": str(e)})
+            m = re.fullmatch(r"/api/habits/([^/]+)/check", path)
+            if m:
+                body = read_json(self)
+                try:
+                    return send_json(self, 200, habits.set_check(conn, m.group(1), body.get("data") or "", body.get("valor", 0)))
+                except (ValueError, LookupError) as e:
+                    return send_json(self, 400, {"error": str(e)})
+            if path == "/api/hoje/nota":
+                body = read_json(self)
+                try:
+                    return send_json(self, 200, habits.save_daily_note(conn, body.get("data") or "", body.get("conteudo") or ""))
+                except ValueError as e:
+                    return send_json(self, 400, {"error": str(e)})
             return send_json(self, 404, {"error": f"POST desconhecido: {path}"})
         finally:
             conn.close()
@@ -173,6 +199,13 @@ class Handler(BaseHTTPRequestHandler):
             if m:
                 try:
                     kanban.delete_task(conn, m.group(1))
+                    return send_json(self, 200, {"ok": True})
+                except LookupError as e:
+                    return send_json(self, 404, {"error": str(e)})
+            m = re.fullmatch(r"/api/habits/([^/]+)", path)
+            if m:
+                try:
+                    habits.delete_habit(conn, m.group(1))
                     return send_json(self, 200, {"ok": True})
                 except LookupError as e:
                     return send_json(self, 404, {"error": str(e)})
