@@ -28,8 +28,14 @@ export interface Task {
   titulo: string;
   column: Column;
   position: number;
+  day_label: string | null;
+  note_md: string;
+  habit_id: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export type Board = Record<Column, Task[]>;
+
+export const DAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"] as const;
+export type DayLabel = (typeof DAY_LABELS)[number];

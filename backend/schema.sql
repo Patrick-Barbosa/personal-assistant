@@ -32,7 +32,32 @@ CREATE TABLE IF NOT EXISTS tasks (
     titulo TEXT NOT NULL,
     task_column TEXT NOT NULL DEFAULT 'todo',
     position REAL NOT NULL DEFAULT 0,
+    day_label TEXT,
+    note_md TEXT NOT NULL DEFAULT '',
+    habit_id TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_column ON tasks(task_column, position);
+
+CREATE TABLE IF NOT EXISTS habits (
+    id TEXT PRIMARY KEY,
+    nome TEXT NOT NULL,
+    tipo TEXT NOT NULL DEFAULT 'binary',
+    unidade TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS habit_checks (
+    habit_id TEXT NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+    data TEXT NOT NULL,
+    valor REAL NOT NULL DEFAULT 1,
+    PRIMARY KEY (habit_id, data)
+);
+
+CREATE TABLE IF NOT EXISTS daily_notes (
+    data TEXT PRIMARY KEY,
+    conteudo TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);

@@ -4,7 +4,7 @@ Web-only personal assistant: chat + kanban board. No Rust, no voice, no vault.
 
 ## Stack
 - Backend: Python stdlib only (`backend/*.py`, `http.server` + `sqlite3` + `urllib`). Zero pip deps.
-- Frontend: React 19 + TypeScript + Vite + Tailwind v4 (`src/`, 8 files).
+- Frontend: React 19 + TypeScript + Vite + Tailwind v4 (`src/`, 8 files). UI libs: `@base-ui/react` (Dialog/Checkbox/Switch/Slider), `@dnd-kit/*` (Semana drag todo/doing/done), `recharts` (Métricas), `react-markdown`+`remark-gfm` (task .md), `diff`+`@git-diff-view/*` (AI suggestion diff), `lucide-react` (icons), `date-fns` (Semana/streak).
 - DB: single SQLite file (`cofres/cache.db` via `DB_PATH`). Old DBs keep working — schema is additive (`tasks` table); delete the file for a fully fresh start.
 
 ## Layout

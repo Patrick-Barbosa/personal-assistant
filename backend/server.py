@@ -148,7 +148,7 @@ class Handler(BaseHTTPRequestHandler):
             m = re.fullmatch(r"/api/tasks/([^/]+)", path)
             if m:
                 try:
-                    return send_json(self, 200, kanban.update_task(conn, m.group(1), body.get("titulo", "")))
+                    return send_json(self, 200, kanban.update_task(conn, m.group(1), body))
                 except (ValueError, LookupError) as e:
                     return send_json(self, 400, {"error": str(e)})
             return send_json(self, 404, {"error": f"PATCH desconhecido: {path}"})

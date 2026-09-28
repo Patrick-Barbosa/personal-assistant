@@ -38,6 +38,7 @@ export const api = {
   createTask: (titulo: string, column: Column = "todo") => request<Task>("POST", "/api/tasks", { titulo, column }),
   moveTask: (id: string, column: Column, index: number) =>
     request<Task>("POST", `/api/tasks/${id}/move`, { column, index }),
-  updateTask: (id: string, titulo: string) => request<Task>("PATCH", `/api/tasks/${id}`, { titulo }),
+  updateTask: (id: string, patch: { titulo?: string; day_label?: string | null; note_md?: string; habit_id?: string | null }) =>
+    request<Task>("PATCH", `/api/tasks/${id}`, patch),
   deleteTask: (id: string) => request<{ ok: boolean }>("DELETE", `/api/tasks/${id}`),
 };

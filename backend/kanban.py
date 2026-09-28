@@ -1,8 +1,10 @@
-"""Flat kanban tasks: todo / doing / done. No weeks, no habits, no notes."""
+"""Flat kanban tasks: todo / doing / done. Task detail: day_label + note_md (.md)."""
 import uuid
 from datetime import datetime
 
 COLUMNS = ("todo", "doing", "done")
+
+DAY_LABELS = ("Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom")
 
 
 def now_iso() -> str:
@@ -15,6 +17,9 @@ def to_dict(row) -> dict:
         "titulo": row["titulo"],
         "column": row["task_column"],
         "position": row["position"],
+        "day_label": row["day_label"] if "day_label" in row.keys() else None,
+        "note_md": row["note_md"] if "note_md" in row.keys() else "",
+        "habit_id": row["habit_id"] if "habit_id" in row.keys() else None,
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
@@ -60,14 +65,39 @@ def move_task(conn, task_id: str, column: str = "todo", index: int = 0) -> dict:
     return to_dict(conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone())
 
 
-def update_task(conn, task_id: str, titulo: str) -> dict:
-    titulo = (titulo or "").strip()
-    if not titulo:
-        raise ValueError("titulo vazio")
-    cur = conn.execute("UPDATE tasks SET titulo = ?, updated_at = ? WHERE id = ?", (titulo, now_iso(), task_id))
-    if cur.rowcount == 0:
+def update_task(conn, task_id: str, patch: dict) -> dict:
+    row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    if not row:
         raise LookupError(f"tarefa não encontrada: {task_id}")
-    conn.commit()
+    updates: dict = {}
+    if "titulo" in patch:
+        titulo = (patch.get("titulo") or "").strip()
+        if not titulo:
+            raise ValueError("titulo vazio")
+        updates["titulo"] = titulo
+    if "day_label" in patch:
+        day = patch.get("day_label")
+        if day in (None, ""):
+            updates["day_label"] = None
+        elif day in DAY_LABELS:
+            updates["day_label"] = day
+        else:
+            raise ValueError(f"day_label inválido: {day}. Use Seg/Ter/Qua/Qui/Sex/Sab/Dom ou vazio.")
+    if "note_md" in patch:
+        note = patch.get("note_md")
+        if note is None:
+            updates["note_md"] = ""
+        elif isinstance(note, str):
+            updates["note_md"] = note
+        else:
+            raise ValueError("note_md deve ser texto")
+    if "habit_id" in patch:
+        hab = patch.get("habit_id")
+        updates["habit_id"] = hab if hab else None
+    if updates:
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        conn.execute(f"UPDATE tasks SET {sets}, updated_at = ? WHERE id = ?", (*updates.values(), now_iso(), task_id))
+        conn.commit()
     return to_dict(conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone())
 
 

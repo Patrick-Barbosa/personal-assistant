@@ -22,9 +22,21 @@ def init_db() -> None:
     try:
         with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
             conn.executescript(f.read())
+        _migrate_tasks(conn)
         conn.commit()
     finally:
         conn.close()
+
+
+def _migrate_tasks(conn) -> None:
+    """Additive migration for DBs created before day_label / note_md / habit_id."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(tasks)").fetchall()}
+    if "day_label" not in cols:
+        conn.execute("ALTER TABLE tasks ADD COLUMN day_label TEXT")
+    if "note_md" not in cols:
+        conn.execute("ALTER TABLE tasks ADD COLUMN note_md TEXT NOT NULL DEFAULT ''")
+    if "habit_id" not in cols:
+        conn.execute("ALTER TABLE tasks ADD COLUMN habit_id TEXT")
 
 
 def rows_to_dicts(cursor) -> list[dict]:

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
 import { COLUMNS, COLUMN_LABELS, type Board, type Column, type Task } from "../types";
+import TaskDetail from "./TaskDetail";
 
 interface Props {
   board: Board;
@@ -10,7 +11,7 @@ interface Props {
 const PREV: Record<Column, Column | null> = { todo: null, doing: "todo", done: "doing" };
 const NEXT: Record<Column, Column | null> = { todo: "doing", doing: "done", done: null };
 
-function Card({ task, index, onChanged }: { task: Task; index: number; onChanged: () => void }) {
+function Card({ task, index, onChanged, onOpen }: { task: Task; index: number; onChanged: () => void; onOpen: () => void }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(task.titulo);
 
@@ -18,7 +19,7 @@ function Card({ task, index, onChanged }: { task: Task; index: number; onChanged
     const t = title.trim();
     setEditing(false);
     if (t && t !== task.titulo) {
-      await api.updateTask(task.id, t);
+      await api.updateTask(task.id, { titulo: t });
       onChanged();
     } else {
       setTitle(task.titulo);
@@ -38,6 +39,16 @@ function Card({ task, index, onChanged }: { task: Task; index: number; onChanged
 
   return (
     <div className="rounded-xl bg-zinc-800 p-3">
+      <div className="mb-1 flex items-center gap-2">
+        {task.day_label && (
+          <span className="rounded-full bg-zinc-700 px-2 py-0.5 text-[11px] font-semibold text-zinc-200">{task.day_label}</span>
+        )}
+        {task.note_md && (
+          <span className="text-[11px] text-zinc-500" title="Tem nota .md">
+            📝
+          </span>
+        )}
+      </div>
       {editing ? (
         <input
           autoFocus
@@ -69,6 +80,9 @@ function Card({ task, index, onChanged }: { task: Task; index: number; onChanged
         >
           →
         </button>
+        <button onClick={onOpen} className="rounded bg-zinc-700 px-2 py-0.5 text-xs text-zinc-200" title="Abrir detalhe">
+          Abrir
+        </button>
         <button onClick={remove} className="ml-auto rounded px-2 py-0.5 text-xs text-zinc-500 hover:text-red-400" title="Excluir">
           ✕
         </button>
@@ -79,6 +93,7 @@ function Card({ task, index, onChanged }: { task: Task; index: number; onChanged
 
 export default function BoardView({ board, refresh }: Props) {
   const [draft, setDraft] = useState("");
+  const [selected, setSelected] = useState<Task | null>(null);
 
   async function add() {
     const titulo = draft.trim();
@@ -110,12 +125,13 @@ export default function BoardView({ board, refresh }: Props) {
             </h2>
             <div className="flex-1 space-y-2 overflow-y-auto">
               {board[col].map((t, i) => (
-                <Card key={t.id} task={t} index={i} onChanged={refresh} />
+                <Card key={t.id} task={t} index={i} onChanged={refresh} onOpen={() => setSelected(t)} />
               ))}
             </div>
           </div>
         ))}
       </div>
+      <TaskDetail task={selected} onClose={() => setSelected(null)} onSaved={refresh} />
     </div>
   );
 }
