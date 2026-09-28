@@ -44,6 +44,7 @@ export default function ChatView({ sessionId }: Props) {
 
   return (
     <div className="flex h-full flex-col">
+      <p className="px-4 pt-2 text-[11px] text-zinc-600">Com contexto: tarefas, hábitos de hoje e notas.</p>
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {messages.length === 0 && (
           <p className="text-sm text-zinc-500">Nenhuma mensagem ainda. Diga olá.</p>

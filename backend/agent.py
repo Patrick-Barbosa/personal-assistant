@@ -1,11 +1,12 @@
-"""Agent loop: DeepSeek (OpenAI-compatible) + 3 kanban tools. Stdlib HTTP via urllib."""
+"""Agent loop: DeepSeek (OpenAI-compatible) + kanban + grounding tools. Stdlib HTTP via urllib."""
 import json
 import urllib.error
 import urllib.request
 
-from . import config, db, kanban
+from . import config, db, habits, kanban
 
 MAX_STEPS = 8
+MAX_CTX = 3000
 
 SYSTEM_PROMPT = (
     "Você é o Copernico, um assistente pessoal direto e conciso. "
@@ -50,6 +51,34 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "listar_habitos",
+            "description": "Lista hábitos com o check de hoje (nome, tipo, valor).",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "ler_nota_tarefa",
+            "description": "Lê a nota .md de uma tarefa por id ou título.",
+            "parameters": {
+                "type": "object",
+                "properties": {"id_ou_titulo": {"type": "string"}},
+                "required": ["id_ou_titulo"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "listar_notas_dia",
+            "description": "Lista as notas rápidas diárias recentes.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
 ]
 
 
@@ -91,6 +120,52 @@ def _chat_api(messages: list[dict], tools: list[dict] | None = None) -> dict:
         raise RuntimeError(f"DeepSeek HTTP {e.code}: {detail}")
 
 
+def build_context(conn) -> str:
+    """Snapshot curto para aterrar o chat: quadro + hábitos de hoje + notas."""
+    try:
+        board = kanban.list_board(conn)
+    except Exception:
+        board = {"todo": [], "doing": [], "done": []}
+    lines = []
+    for col in ("todo", "doing", "done"):
+        items = board.get(col, [])[:15]
+        if not items:
+            lines.append(f"## {col}\n(vazio)")
+            continue
+        rows = []
+        for t in items:
+            day = f" [{t.get('day_label')}]" if t.get("day_label") else ""
+            rows.append(f"- {t.get('titulo')}{day} (id={t.get('id')})")
+        lines.append(f"## {col}\n" + "\n".join(rows))
+    try:
+        habs = habits.list_habits(conn, habits.today_str())
+    except Exception:
+        habs = []
+    if habs:
+        lines.append("## hábitos hoje\n" + "\n".join(f"- {h['nome']}: {h['valor']}{h['unidade']}" for h in habs))
+    else:
+        lines.append("## hábitos hoje\n(nenhum)")
+    try:
+        nota = habits.get_daily_note(conn, habits.today_str())
+    except Exception:
+        nota = None
+    if nota and nota.get("conteudo"):
+        lines.append("## nota de hoje\n" + nota["conteudo"][:800])
+    try:
+        notes = conn.execute(
+            "SELECT titulo, note_md FROM tasks WHERE note_md IS NOT NULL AND note_md != '' ORDER BY updated_at DESC LIMIT 5"
+        ).fetchall()
+    except Exception:
+        notes = []
+    if notes:
+        cut = []
+        for r in notes:
+            cut.append(f"### {r['titulo']}\n{(r['note_md'] or '')[:300]}")
+        lines.append("## notas de tarefas\n" + "\n".join(cut))
+    ctx = "\n".join(lines)
+    return ctx[:MAX_CTX]
+
+
 def execute_tool(conn, name: str, args: dict) -> str:
     try:
         if name == "listar_kanban":
@@ -112,6 +187,24 @@ def execute_tool(conn, name: str, args: dict) -> str:
                 return f"Tarefa não encontrada: {key}"
             t = kanban.move_task(conn, row["id"], args.get("coluna", "todo"))
             return f"Tarefa movida: {t['titulo']} -> {t['column']}"
+        if name == "listar_habitos":
+            habs = habits.list_habits(conn, habits.today_str())
+            if not habs:
+                return "(nenhum hábito)"
+            return "\n".join(f"- {h['nome']} ({h['tipo']}): {h['valor']}{h['unidade']}" for h in habs)
+        if name == "ler_nota_tarefa":
+            key = args.get("id_ou_titulo", "")
+            row = conn.execute("SELECT titulo, note_md FROM tasks WHERE id = ?", (key,)).fetchone()
+            if not row:
+                row = conn.execute("SELECT titulo, note_md FROM tasks WHERE titulo LIKE ? ORDER BY updated_at DESC LIMIT 1", (f"%{key}%",)).fetchone()
+            if not row:
+                return f"Tarefa não encontrada: {key}"
+            return f"# {row['titulo']}\n{(row['note_md'] or '(nota vazia)')[:2000]}"
+        if name == "listar_notas_dia":
+            rows = conn.execute("SELECT data, conteudo FROM daily_notes ORDER BY data DESC LIMIT 7").fetchall()
+            if not rows:
+                return "(nenhuma nota diária)"
+            return "\n".join(f"## {r['data']}\n{(r['conteudo'] or '')[:500]}" for r in rows)
         return f"Ferramenta desconhecida: {name}"
     except Exception as e:
         return f"Erro em {name}: {e}"
@@ -122,6 +215,7 @@ def run_turn(session_id: str, user_input: str) -> str:
     try:
         custom = conn.execute("SELECT value FROM settings WHERE key = 'custom_instructions'").fetchone()
         system = SYSTEM_PROMPT + (f"\n\n[INSTRUÇÕES DO USUÁRIO]\n{custom['value']}" if custom and custom["value"] else "")
+        system += "\n\n[CONTEXTO]\n" + build_context(conn)
         msgs = conn.execute(
             "SELECT role, content FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT 20", (session_id,)
         ).fetchall()
