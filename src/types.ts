@@ -61,3 +61,21 @@ export interface Hoje {
   doing: Task[];
   nota: DailyNote | null;
 }
+
+export interface MetricaHabito {
+  id: string;
+  nome: string;
+  pct: number;
+  streak: number;
+  done_days: number;
+}
+
+export interface Metricas {
+  semana: { inicio: string; fim: string };
+  habitos: MetricaHabito[];
+  serie: { data: string; feitos: number }[];
+  geral: { media_pct: number; cheios: number };
+  tarefas: { criadas: number; concluidas: number; carregadas: number; pct: number };
+  notas: { total: number; diarias: number; tarefas: number };
+  resumo: string | null;
+}

@@ -12,7 +12,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import agent, config, db, habits, kanban
+from . import agent, config, db, habits, kanban, metrics
 
 
 def now_iso() -> str:
@@ -83,6 +83,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/hoje":
                 qs = parse_qs(url.query)
                 return send_json(self, 200, habits.get_hoje(conn, (qs.get("data") or [""])[0]))
+            if path == "/api/metricas":
+                qs = parse_qs(url.query)
+                return send_json(self, 200, metrics.get_metricas(conn, (qs.get("data") or [""])[0]))
             return send_json(self, 404, {"error": f"GET desconhecido: {path}"})
         finally:
             conn.close()
@@ -157,6 +160,10 @@ class Handler(BaseHTTPRequestHandler):
                     return send_json(self, 200, habits.save_daily_note(conn, body.get("data") or "", body.get("conteudo") or ""))
                 except ValueError as e:
                     return send_json(self, 400, {"error": str(e)})
+            if path == "/api/metricas/resumo":
+                body = read_json(self)
+                m = metrics.get_metricas(conn, body.get("data") or "")
+                return send_json(self, 200, {"resumo": metrics.summarize_week(m)})
             return send_json(self, 404, {"error": f"POST desconhecido: {path}"})
         finally:
             conn.close()

@@ -4,8 +4,9 @@ import type { Board, Session } from "./types";
 import BoardView from "./components/BoardView";
 import ChatView from "./components/ChatView";
 import HojeView from "./components/HojeView";
+import MetricasView from "./components/MetricasView";
 
-type View = "hoje" | "chat" | "board";
+type View = "hoje" | "chat" | "board" | "metricas";
 
 const EMPTY_BOARD: Board = { todo: [], doing: [], done: [] };
 
@@ -76,6 +77,14 @@ export default function App() {
           >
             Semana
           </button>
+          <button
+            onClick={() => setView("metricas")}
+            className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold ${
+              view === "metricas" ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400"
+            }`}
+          >
+            Métricas
+          </button>
         </div>
 
         {view === "chat" && (
@@ -116,6 +125,8 @@ export default function App() {
       <main className="flex-1 overflow-hidden">
         {view === "hoje" ? (
           <HojeView onTasksChanged={refreshBoard} />
+        ) : view === "metricas" ? (
+          <MetricasView />
         ) : view === "chat" ? (
           activeId ? (
             <ChatView key={activeId} sessionId={activeId} />

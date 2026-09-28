@@ -1,4 +1,4 @@
-import type { Board, Column, DailyNote, Habit, Hoje, Message, Session, Task } from "./types";
+import type { Board, Column, DailyNote, Habit, Hoje, Message, Metricas, Session, Task } from "./types";
 
 const BASE = "http://127.0.0.1:8000";
 
@@ -51,4 +51,6 @@ export const api = {
   getHoje: (data?: string) => request<Hoje>("GET", data ? `/api/hoje?data=${data}` : "/api/hoje"),
   saveNota: (conteudo: string, data?: string) =>
     request<DailyNote>("POST", "/api/hoje/nota", { conteudo, data }),
+  getMetricas: (data?: string) => request<Metricas>("GET", data ? `/api/metricas?data=${data}` : "/api/metricas"),
+  resumoSemana: (data?: string) => request<{ resumo: string }>("POST", "/api/metricas/resumo", { data }),
 };
