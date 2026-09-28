@@ -6,6 +6,9 @@ COLUMNS = ("todo", "doing", "done")
 
 DAY_LABELS = ("Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom")
 
+PLACES = ("backlog", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom", "done")
+TRAY = "agendar"  # doing sem day_label: espera o usuário escolher o dia
+
 
 def now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
@@ -106,3 +109,56 @@ def delete_task(conn, task_id: str) -> None:
     if cur.rowcount == 0:
         raise LookupError(f"tarefa não encontrada: {task_id}")
     conn.commit()
+
+
+def _group_ids(conn, dest: str, exclude: str) -> list[str]:
+    if dest == "backlog":
+        rows = conn.execute("SELECT id FROM tasks WHERE task_column = 'todo' AND id != ? ORDER BY position, id", (exclude,)).fetchall()
+    elif dest in DAY_LABELS:
+        rows = conn.execute("SELECT id FROM tasks WHERE task_column = 'doing' AND day_label = ? AND id != ? ORDER BY position, id", (dest, exclude)).fetchall()
+    elif dest == "done":
+        rows = conn.execute("SELECT id FROM tasks WHERE task_column = 'done' AND id != ? ORDER BY position, id", (exclude,)).fetchall()
+    else:  # agendar: doing sem dia
+        rows = conn.execute("SELECT id FROM tasks WHERE task_column = 'doing' AND day_label IS NULL AND id != ? ORDER BY position, id", (exclude,)).fetchall()
+    return [r["id"] for r in rows]
+
+
+def place_task(conn, task_id: str, dest: str, index: int = 0) -> dict:
+    """Move visual: backlog | Seg..Dom | done | agendar. Define coluna + day_label juntos."""
+    if dest not in (*PLACES, TRAY):
+        raise ValueError(f"destino inválido: {dest}")
+    row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    if not row:
+        raise LookupError(f"tarefa não encontrada: {task_id}")
+    if dest == "backlog":
+        column, day = "todo", None
+    elif dest in DAY_LABELS:
+        column, day = "doing", dest
+    elif dest == "done":
+        column, day = "done", row["day_label"] if "day_label" in row.keys() else None
+    else:
+        column, day = "doing", None
+    ids = _group_ids(conn, dest, task_id)
+    index = max(0, min(int(index or 0), len(ids)))
+    ids.insert(index, task_id)
+    for i, tid in enumerate(ids):
+        if tid == task_id:
+            conn.execute("UPDATE tasks SET position = ?, task_column = ?, day_label = ?, updated_at = ? WHERE id = ?", (i, column, day, now_iso(), tid))
+        else:
+            conn.execute("UPDATE tasks SET position = ? WHERE id = ?", (i, tid))
+    conn.commit()
+    return to_dict(conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone())
+
+
+def group_board(conn) -> dict[str, list[dict]]:
+    """Quadro agrupado para a Semana: backlog + dias + agendar + feito."""
+    board = list_board(conn)
+    groups: dict[str, list[dict]] = {"backlog": board["todo"], "done": board["done"], TRAY: []}
+    for d in DAY_LABELS:
+        groups[d] = []
+    for t in board["doing"]:
+        if t.get("day_label") in DAY_LABELS:
+            groups[t["day_label"]].append(t)
+        else:
+            groups[TRAY].append(t)
+    return groups

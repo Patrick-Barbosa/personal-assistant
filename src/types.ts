@@ -40,6 +40,11 @@ export type Board = Record<Column, Task[]>;
 export const DAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"] as const;
 export type DayLabel = (typeof DAY_LABELS)[number];
 
+export const WEEK_PLACES = ["backlog", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom", "done"] as const;
+export type WeekPlace = (typeof WEEK_PLACES)[number];
+export const TRAY = "agendar";
+export type Place = WeekPlace | typeof TRAY;
+
 export interface Habit {
   id: string;
   nome: string;

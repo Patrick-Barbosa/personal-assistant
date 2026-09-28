@@ -140,6 +140,13 @@ class Handler(BaseHTTPRequestHandler):
                     return send_json(self, 200, kanban.move_task(conn, m.group(1), body.get("column", "todo"), int(body.get("index") or 0)))
                 except (ValueError, LookupError) as e:
                     return send_json(self, 400, {"error": str(e)})
+            m = re.fullmatch(r"/api/tasks/([^/]+)/place", path)
+            if m:
+                body = read_json(self)
+                try:
+                    return send_json(self, 200, kanban.place_task(conn, m.group(1), body.get("dest") or "backlog", int(body.get("index") or 0)))
+                except (ValueError, LookupError) as e:
+                    return send_json(self, 400, {"error": str(e)})
             if path == "/api/habits":
                 body = read_json(self)
                 try:
@@ -182,6 +189,12 @@ class Handler(BaseHTTPRequestHandler):
             if m:
                 try:
                     return send_json(self, 200, kanban.update_task(conn, m.group(1), body))
+                except (ValueError, LookupError) as e:
+                    return send_json(self, 400, {"error": str(e)})
+            m = re.fullmatch(r"/api/habits/([^/]+)", path)
+            if m:
+                try:
+                    return send_json(self, 200, habits.update_habit(conn, m.group(1), body))
                 except (ValueError, LookupError) as e:
                     return send_json(self, 400, {"error": str(e)})
             return send_json(self, 404, {"error": f"PATCH desconhecido: {path}"})

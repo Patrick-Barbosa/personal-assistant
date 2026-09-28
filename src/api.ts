@@ -38,6 +38,8 @@ export const api = {
   createTask: (titulo: string, column: Column = "todo") => request<Task>("POST", "/api/tasks", { titulo, column }),
   moveTask: (id: string, column: Column, index: number) =>
     request<Task>("POST", `/api/tasks/${id}/move`, { column, index }),
+  placeTask: (id: string, dest: string, index: number) =>
+    request<Task>("POST", `/api/tasks/${id}/place`, { dest, index }),
   updateTask: (id: string, patch: { titulo?: string; day_label?: string | null; note_md?: string; habit_id?: string | null }) =>
     request<Task>("PATCH", `/api/tasks/${id}`, patch),
   deleteTask: (id: string) => request<{ ok: boolean }>("DELETE", `/api/tasks/${id}`),
@@ -48,6 +50,8 @@ export const api = {
   deleteHabit: (id: string) => request<{ ok: boolean }>("DELETE", `/api/habits/${id}`),
   checkHabit: (id: string, valor: number, data?: string) =>
     request<Habit>("POST", `/api/habits/${id}/check`, { valor, data }),
+  updateHabit: (id: string, patch: { nome?: string; unidade?: string }) =>
+    request<Habit>("PATCH", `/api/habits/${id}`, patch),
   getHoje: (data?: string) => request<Hoje>("GET", data ? `/api/hoje?data=${data}` : "/api/hoje"),
   saveNota: (conteudo: string, data?: string) =>
     request<DailyNote>("POST", "/api/hoje/nota", { conteudo, data }),

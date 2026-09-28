@@ -49,6 +49,14 @@ export default function App() {
     setActiveId(s.id);
   }
 
+  async function planWithAI() {
+    const s = await api.createSession("Plano da semana");
+    const list = await refreshSessions();
+    setSessions(list);
+    setActiveId(s.id);
+    setView("chat");
+  }
+
   async function removeSession(id: string) {
     await api.deleteSession(id);
     const list = await refreshSessions();
@@ -131,7 +139,7 @@ export default function App() {
             </div>
           )
         ) : (
-          <BoardView board={board} refresh={refreshBoard} />
+          <BoardView board={board} refresh={refreshBoard} onPlanWithAI={planWithAI} />
         )}
       </main>
     </div>

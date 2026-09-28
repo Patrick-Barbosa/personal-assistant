@@ -9,10 +9,13 @@ import type { Habit, Hoje } from "../types";
 
 function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onChanged: () => void }) {
   const [draft, setDraft] = useState(String(habit.valor ?? 0));
+  const [editingUnit, setEditingUnit] = useState(false);
+  const [unitDraft, setUnitDraft] = useState(habit.unidade ?? "");
 
   useEffect(() => {
     setDraft(String(habit.valor ?? 0));
-  }, [habit.valor]);
+    setUnitDraft(habit.unidade ?? "");
+  }, [habit.valor, habit.unidade]);
 
   async function toggleBinary(checked: boolean) {
     await api.checkHabit(habit.id, checked ? 1 : 0, data);
@@ -20,15 +23,25 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
   }
 
   async function commitNumeric(v: number) {
-    if (Number.isNaN(v)) return;
+    if (Number.isNaN(v) || v < 0) return;
     await api.checkHabit(habit.id, v, data);
     onChanged();
+  }
+
+  async function saveUnit() {
+    setEditingUnit(false);
+    if (unitDraft.trim() !== (habit.unidade ?? "")) {
+      await api.updateHabit(habit.id, { unidade: unitDraft.trim() });
+      onChanged();
+    }
   }
 
   async function remove() {
     await api.deleteHabit(habit.id);
     onChanged();
   }
+
+  const sliderMax = Math.max(10, Math.ceil((Number(draft) || 0) * 1.5), Math.ceil(habit.valor * 1.5));
 
   return (
     <div className="flex items-center gap-3 rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] px-3 py-2">
@@ -44,20 +57,6 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
         </Checkbox.Root>
       ) : (
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <Slider.Root
-            value={[Number(draft) || 0]}
-            min={0}
-            max={100}
-            step={1}
-            onValueChange={(v) => setDraft(String((v as number[])[0]))}
-            onValueCommitted={(v) => commitNumeric((v as unknown as number[])[0] ?? Number(draft))}
-            className="flex-1"
-          >
-            <Slider.Track className="h-1.5 rounded bg-[#e9e9e9]">
-              <Slider.Indicator className="rounded bg-[#30a81d]" />
-              <Slider.Thumb className="h-4 w-4 rounded-full border border-[#141414] bg-[#ffffff] outline-none" />
-            </Slider.Track>
-          </Slider.Root>
           <input
             type="number"
             min={0}
@@ -65,9 +64,38 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
             onChange={(e) => setDraft(e.target.value)}
             onBlur={() => commitNumeric(Number(draft))}
             onKeyDown={(e) => e.key === "Enter" && commitNumeric(Number(draft))}
-            className="w-16 rounded-[8px] border border-[#d9d9d9] bg-[#ffffff] px-2 py-1 text-sm text-[#141414] outline-none"
+            className="w-20 rounded-[8px] border border-[#141414] bg-[#ffffff] px-2 py-1 text-center text-sm font-bold text-[#141414] outline-none"
+            title="Valor de hoje"
           />
-          {habit.unidade && <span className="text-xs text-[#141414]/50">{habit.unidade}</span>}
+          {editingUnit ? (
+            <input
+              autoFocus
+              value={unitDraft}
+              onChange={(e) => setUnitDraft(e.target.value)}
+              onBlur={saveUnit}
+              onKeyDown={(e) => e.key === "Enter" && saveUnit()}
+              placeholder="páginas, km, min…"
+              className="w-28 rounded-[8px] border border-[#141414] bg-[#ffffff] px-2 py-1 text-sm outline-none"
+            />
+          ) : (
+            <button onClick={() => setEditingUnit(true)} className="truncate text-sm text-[#141414]/60 hover:text-[#141414]" title="Clique para editar a unidade">
+              {habit.unidade || "+ unidade"}
+            </button>
+          )}
+          <Slider.Root
+            value={[Number(draft) || 0]}
+            min={0}
+            max={sliderMax}
+            step={1}
+            onValueChange={(v) => setDraft(String((v as number[])[0]))}
+            onValueCommitted={(v) => commitNumeric((v as unknown as number[])[0] ?? Number(draft))}
+            className="hidden min-w-24 flex-1 sm:block"
+          >
+            <Slider.Track className="h-1.5 rounded bg-[#e9e9e9]">
+              <Slider.Indicator className="rounded bg-[#30a81d]" />
+              <Slider.Thumb className="h-4 w-4 rounded-full border border-[#141414] bg-[#ffffff] outline-none" />
+            </Slider.Track>
+          </Slider.Root>
         </div>
       )}
       <span className="flex-1 truncate text-sm text-[#141414]">
@@ -155,34 +183,41 @@ export default function HojeView({ onTasksChanged }: { onTasksChanged?: () => vo
             <p className="text-sm text-[#141414]/50">Nenhum hábito ainda. Crie até 10 abaixo.</p>
           )}
         </div>
-        <div className="mt-2 flex gap-2">
+        <div className="mt-3 space-y-2 rounded-[8px] bg-[#f5f5f5] p-3">
           <input
             value={nome}
             onChange={(e) => setNome(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addHabit()}
-            placeholder="Novo hábito… ex: Ler"
-            className="flex-1 rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-3 py-2 text-sm text-[#141414] outline-none placeholder:text-[#141414]/40"
+            placeholder="Nome do hábito… ex: Ler"
+            className="w-full rounded-[8px] border border-[#d9d9d9] bg-[#ffffff] px-3 py-2 text-sm text-[#141414] outline-none placeholder:text-[#141414]/40"
           />
-          <select value={tipo} onChange={(e) => setTipo(e.target.value as "binary" | "numeric")} className="rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-2 text-sm text-[#141414]">
-            <option value="binary">Fez/Não</option>
-            <option value="numeric">Número</option>
-          </select>
-          {tipo === "numeric" && (
-            <input
-              value={unidade}
-              onChange={(e) => setUnidade(e.target.value)}
-              placeholder="min"
-              className="w-16 rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-3 py-2 text-sm outline-none placeholder:text-[#141414]/40"
-            />
-          )}
-          <button onClick={addHabit} className="flim-nav rounded-[8px] bg-[#141414] px-4 py-2 text-[#ffffff]">
-            +
-          </button>
+          <div className="flex gap-2">
+            <div className="flex rounded-[8px] border border-[#d9d9d9] bg-[#ffffff] p-0.5">
+              <button onClick={() => setTipo("binary")} className={`flim-nav rounded-[6px] px-3 py-1.5 ${tipo === "binary" ? "bg-[#141414] text-[#ffffff]" : "text-[#141414]/60"}`}>
+                Fez / Não fez
+              </button>
+              <button onClick={() => setTipo("numeric")} className={`flim-nav rounded-[6px] px-3 py-1.5 ${tipo === "numeric" ? "bg-[#141414] text-[#ffffff]" : "text-[#141414]/60"}`}>
+                Quantidade
+              </button>
+            </div>
+            {tipo === "numeric" && (
+              <input
+                value={unidade}
+                onChange={(e) => setUnidade(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addHabit()}
+                placeholder="Unidade — ex: páginas, km, min"
+                className="min-w-0 flex-1 rounded-[8px] border border-[#d9d9d9] bg-[#ffffff] px-3 py-2 text-sm outline-none placeholder:text-[#141414]/40"
+              />
+            )}
+            <button onClick={addHabit} className="flim-nav rounded-[8px] bg-[#141414] px-4 py-2 text-[#ffffff]">
+              Criar
+            </button>
+          </div>
         </div>
       </section>
 
       <section className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-5">
-        <h2 className="flim-nav mb-2 font-bold text-[#141414]">Fazendo hoje ({hoje?.doing.length ?? 0})</h2>
+        <h2 className="flim-nav mb-2 font-bold text-[#141414]">Na semana ({hoje?.doing.length ?? 0})</h2>
         <div className="space-y-1">
           {(hoje?.doing ?? []).map((t) => (
             <p key={t.id} className="truncate rounded-[8px] bg-[#f5f5f5] px-3 py-1.5 text-sm text-[#141414]">

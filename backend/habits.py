@@ -69,6 +69,31 @@ def delete_habit(conn, habit_id: str) -> None:
     conn.commit()
 
 
+def update_habit(conn, habit_id: str, patch: dict) -> dict:
+    row = conn.execute("SELECT * FROM habits WHERE id = ?", (habit_id,)).fetchone()
+    if not row:
+        raise LookupError(f"hábito não encontrado: {habit_id}")
+    updates: dict = {}
+    if "nome" in patch:
+        nome = (patch.get("nome") or "").strip()
+        if not nome:
+            raise ValueError("nome vazio")
+        updates["nome"] = nome
+    if "unidade" in patch:
+        updates["unidade"] = (patch.get("unidade") or "").strip()
+    if updates:
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        conn.execute(f"UPDATE habits SET {sets} WHERE id = ?", (*updates.values(), habit_id))
+        conn.commit()
+    data = habits_today(conn)
+    return habit_to_dict(conn.execute("SELECT * FROM habits WHERE id = ?", (habit_id,)).fetchone(), data.get(habit_id, 0))
+
+
+def habits_today(conn) -> dict[str, float]:
+    rows = conn.execute("SELECT habit_id, valor FROM habit_checks WHERE data = ?", (today_str(),)).fetchall()
+    return {r["habit_id"]: r["valor"] for r in rows}
+
+
 def set_check(conn, habit_id: str, data: str, valor: float) -> dict:
     data = _check_data(data)
     row = conn.execute("SELECT * FROM habits WHERE id = ?", (habit_id,)).fetchone()
