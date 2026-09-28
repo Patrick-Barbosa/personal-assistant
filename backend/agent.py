@@ -11,7 +11,10 @@ SYSTEM_PROMPT = (
     "Você é o Copernico, um assistente pessoal direto e conciso. "
     "Fale sempre em português. "
     "Você pode gerenciar o quadro de tarefas do usuário com as ferramentas "
-    "(colunas: todo, doing, done). Quando criar ou mover tarefas, confirme o que fez."
+    "(colunas: todo=backlog, doing=esta semana, done=feito). "
+    "Regra de planejamento: ao planejar a semana, crie tarefas APENAS no backlog (todo). "
+    "O usuário move para a semana manualmente. "
+    "Quando criar ou mover tarefas, confirme o que fez."
 )
 
 TOOLS = [
@@ -27,10 +30,10 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "criar_tarefa",
-            "description": "Cria uma tarefa no quadro.",
+            "description": "Cria uma tarefa no backlog (coluna todo). Use para planejamento semanal.",
             "parameters": {
                 "type": "object",
-                "properties": {"titulo": {"type": "string"}, "coluna": {"type": "string"}},
+                "properties": {"titulo": {"type": "string"}},
                 "required": ["titulo"],
             },
         },
@@ -98,8 +101,8 @@ def execute_tool(conn, name: str, args: dict) -> str:
                 out.append(f"## {col}\n" + "\n".join(items))
             return "\n".join(out)
         if name == "criar_tarefa":
-            t = kanban.create_task(conn, args.get("titulo", ""), args.get("coluna") or "todo")
-            return f"Tarefa criada: {t['titulo']} (id={t['id']})"
+            t = kanban.create_task(conn, args.get("titulo", ""), "todo")
+            return f"Tarefa criada no backlog: {t['titulo']} (id={t['id']})"
         if name == "mover_tarefa":
             key = args.get("id_ou_titulo", "")
             row = conn.execute("SELECT id FROM tasks WHERE id = ?", (key,)).fetchone()
