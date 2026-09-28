@@ -4,23 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Copernico</title>
-    <script>
-      (function() {
-        try {
-          var saved = localStorage.getItem('copernico-theme');
-          var theme = (saved === 'light') ? 'light' : 'dark';
-          document.documentElement.classList.remove('light', 'dark');
-          document.documentElement.classList.add(theme);
-        } catch(e) {}
-      })();
-    </script>
-    <style>
-      /* Pintura sólida desde o primeiro frame (janela opaca; sem herança do era-overlay). */
-      html, body { margin: 0; padding: 0; background-color: #09090b; }
-      html.light, html.light body { background-color: #f4f4f5; }
-    </style>
   </head>
-  <body class="m-0 p-0 overflow-hidden select-none text-[var(--text-primary)] antialiased font-sans">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
