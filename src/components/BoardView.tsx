@@ -40,22 +40,22 @@ function Card({ task, onChanged, onOpen }: { task: Task; onChanged: () => void; 
     <div
       ref={setNodeRef}
       style={transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined}
-      className={`rounded-xl bg-zinc-800 p-3 ${isDragging ? "opacity-50" : ""}`}
+      className={`rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3 ${isDragging ? "opacity-50" : ""}`}
     >
       <div className="mb-1 flex items-center gap-2">
         <button
           {...listeners}
           {...attributes}
-          className="cursor-grab touch-none rounded px-1 text-xs text-zinc-500 hover:text-zinc-200"
+          className="cursor-grab touch-none rounded px-1 text-xs text-[#141414]/40 hover:text-[#141414]"
           title="Arrastar"
         >
           ⠿
         </button>
         {task.day_label && (
-          <span className="rounded-full bg-zinc-700 px-2 py-0.5 text-[11px] font-semibold text-zinc-200">{task.day_label}</span>
+          <span className="rounded-full border border-[#30a81d] px-2 py-0.5 text-[11px] font-semibold text-[#141414]">{task.day_label}</span>
         )}
         {task.note_md && (
-          <span className="text-[11px] text-zinc-500" title="Tem nota .md">
+          <span className="text-[11px] text-[#141414]/50" title="Tem nota .md">
             📝
           </span>
         )}
@@ -67,18 +67,18 @@ function Card({ task, onChanged, onOpen }: { task: Task; onChanged: () => void; 
           onChange={(e) => setTitle(e.target.value)}
           onBlur={save}
           onKeyDown={(e) => e.key === "Enter" && save()}
-          className="w-full rounded bg-zinc-700 px-2 py-1 text-sm text-zinc-100 outline-none"
+          className="w-full rounded-[8px] border border-[#141414] bg-[#ffffff] px-2 py-1 text-sm text-[#141414] outline-none"
         />
       ) : (
-        <p onClick={() => setEditing(true)} className="cursor-text text-sm text-zinc-100" title="Clique para renomear">
+        <p onClick={() => setEditing(true)} className="cursor-text text-sm text-[#141414]" title="Clique para renomear">
           {task.titulo}
         </p>
       )}
       <div className="mt-2 flex gap-1">
-        <button onClick={onOpen} className="rounded bg-zinc-700 px-2 py-0.5 text-xs text-zinc-200" title="Abrir detalhe">
+        <button onClick={onOpen} className="rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-2 py-0.5 text-xs text-[#141414]" title="Abrir detalhe">
           Abrir
         </button>
-        <button onClick={remove} className="ml-auto rounded px-2 py-0.5 text-xs text-zinc-500 hover:text-red-400" title="Excluir">
+        <button onClick={remove} className="ml-auto rounded px-2 py-0.5 text-xs text-[#141414]/40 hover:text-red-600" title="Excluir">
           ✕
         </button>
       </div>
@@ -89,11 +89,11 @@ function Card({ task, onChanged, onOpen }: { task: Task; onChanged: () => void; 
 function ColumnView({ col, tasks, onChanged, onOpen }: { col: Column; tasks: Task[]; onChanged: () => void; onOpen: (t: Task) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col-${col}` });
   return (
-    <div ref={setNodeRef} className={`flex flex-col overflow-hidden rounded-2xl p-3 ${isOver ? "bg-zinc-800" : "bg-zinc-900"}`}>
-      <h2 className="mb-1 text-sm font-semibold text-zinc-400">
+    <div ref={setNodeRef} className={`flex flex-col overflow-hidden rounded-[16px] border p-3 ${isOver ? "border-[#30a81d] bg-[#ffffff]" : "border-[#d9d9d9] bg-[#ffffff]/70"}`}>
+      <h2 className="flim-nav mb-1 font-bold text-[#141414]">
         {COLUMN_LABELS[col]} ({tasks.length})
       </h2>
-      <p className="mb-2 text-[11px] text-zinc-600">{COLUMN_HINT[col]}</p>
+      <p className="mb-2 text-[11px] text-[#141414]/50">{COLUMN_HINT[col]}</p>
       <div className="flex-1 space-y-2 overflow-y-auto">
         {tasks.map((t) => (
           <Card key={t.id} task={t} onChanged={onChanged} onOpen={() => onOpen(t)} />
@@ -146,10 +146,10 @@ export default function BoardView({ board, refresh }: Props) {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
-          placeholder="Nova tarefa no backlog… (Enter)"
-          className="flex-1 rounded-xl bg-zinc-800 px-4 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-500 focus:ring-1 focus:ring-blue-600"
+          placeholder="NOVA TAREFA NO BACKLOG…"
+          className="flim-nav flex-1 rounded-[160px] border border-[#d9d9d9] bg-[#ffffff] px-5 py-3 text-[#141414] outline-none placeholder:text-[#141414]/40"
         />
-        <button onClick={add} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white">
+        <button onClick={add} className="flim-nav rounded-[8px] bg-[#141414] px-5 py-2 text-[#ffffff]">
           Adicionar
         </button>
       </div>

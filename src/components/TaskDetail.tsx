@@ -69,27 +69,27 @@ export default function TaskDetail({ task, onClose, onSaved }: Props) {
   return (
     <Dialog.Root open={task !== null} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 bg-black/60" />
-        <Dialog.Popup className="fixed left-1/2 top-1/2 max-h-[90vh] w-[min(640px,92vw)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl bg-zinc-900 p-5 outline-none">
+        <Dialog.Backdrop className="fixed inset-0 bg-[#141414]/40" />
+        <Dialog.Popup className="fixed left-1/2 top-1/2 max-h-[90vh] w-[min(640px,92vw)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-5 outline-none">
           {task && (
             <>
-              <Dialog.Title className="text-base font-semibold text-zinc-100">Detalhe da tarefa</Dialog.Title>
-              <Dialog.Description className="mb-4 text-sm text-zinc-500">
+              <Dialog.Title className="text-base font-bold text-[#141414]">Detalhe da tarefa</Dialog.Title>
+              <Dialog.Description className="mb-4 text-sm text-[#141414]/50">
                 Título + etiqueta do dia + nota .md
               </Dialog.Description>
 
-              <label className="mb-1 block text-xs font-semibold text-zinc-400">Título</label>
+              <label className="flim-nav mb-1 block text-[#141414]/60">Título</label>
               <input
                 value={titulo}
                 onChange={(e) => setTitulo(e.target.value)}
-                className="mb-3 w-full rounded-xl bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-blue-600"
+                className="mb-3 w-full rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-3 py-2 text-sm text-[#141414] outline-none"
               />
 
-              <label className="mb-1 block text-xs font-semibold text-zinc-400">Dia da semana</label>
+              <label className="flim-nav mb-1 block text-[#141414]/60">Dia da semana</label>
               <div className="mb-4 flex flex-wrap gap-1">
                 <button
                   onClick={() => setDayLabel("")}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${dayLabel === "" ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400"}`}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${dayLabel === "" ? "border-[#141414] bg-[#141414] text-[#ffffff]" : "border-[#d9d9d9] text-[#141414]"}`}
                 >
                   Sem dia
                 </button>
@@ -97,7 +97,7 @@ export default function TaskDetail({ task, onClose, onSaved }: Props) {
                   <button
                     key={d}
                     onClick={() => setDayLabel(d)}
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${dayLabel === d ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400"}`}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold ${dayLabel === d ? "border-[#141414] bg-[#141414] text-[#ffffff]" : "border-[#d9d9d9] text-[#141414]"}`}
                   >
                     {d}
                   </button>
@@ -109,7 +109,7 @@ export default function TaskDetail({ task, onClose, onSaved }: Props) {
                   <button
                     key={m}
                     onClick={() => setMode(m)}
-                    className={`rounded-lg px-3 py-1 text-xs font-semibold ${mode === m ? "bg-zinc-700 text-white" : "text-zinc-500 hover:text-zinc-300"}`}
+                    className={`flim-nav rounded-[8px] px-3 py-1 ${mode === m ? "bg-[#141414] text-[#ffffff]" : "text-[#141414]/50 hover:text-[#141414]"}`}
                   >
                     {m === "editar" ? "Editar" : m === "previa" ? "Prévia" : "Diff"}
                   </button>
@@ -122,29 +122,29 @@ export default function TaskDetail({ task, onClose, onSaved }: Props) {
                   onChange={(e) => setNote(e.target.value)}
                   rows={10}
                   placeholder="Nota em Markdown… ex: ## Objetivo&#10;- [ ] passo 1"
-                  className="w-full rounded-xl bg-zinc-800 px-3 py-2 font-mono text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:ring-1 focus:ring-blue-600"
+                  className="w-full rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-3 py-2 font-mono text-sm text-[#141414] outline-none placeholder:text-[#141414]/40"
                 />
               )}
 
               {mode === "previa" && (
-                <div className="min-h-40 rounded-xl bg-zinc-800 px-4 py-3 text-sm text-zinc-100">
+                <div className="min-h-40 rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-4 py-3 text-sm text-[#141414]">
                   {note.trim() ? (
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{note}</ReactMarkdown>
                   ) : (
-                    <p className="text-zinc-500">Nada para pré-visualizar.</p>
+                    <p className="text-[#141414]/40">Nada para pré-visualizar.</p>
                   )}
                 </div>
               )}
 
               {mode === "diff" && (
-                <div className="min-h-40 whitespace-pre-wrap rounded-xl bg-zinc-800 px-4 py-3 font-mono text-xs">
+                <div className="min-h-40 whitespace-pre-wrap rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-4 py-3 font-mono text-xs">
                   {note === savedNote ? (
-                    <p className="font-sans text-sm text-zinc-500">Sem alterações desde o último save.</p>
+                    <p className="font-sans text-sm text-[#141414]/50">Sem alterações desde o último save.</p>
                   ) : (
                     diffParts.map((p, i) => (
                       <span
                         key={i}
-                        className={p.added ? "bg-green-900/60 text-green-200" : p.removed ? "bg-red-900/60 text-red-200" : "text-zinc-400"}
+                        className={p.added ? "bg-[#30a81d]/20 text-[#141414]" : p.removed ? "bg-[#ff8400]/20 text-[#141414]" : "text-[#141414]/60"}
                       >
                         {p.value}
                       </span>
@@ -153,16 +153,16 @@ export default function TaskDetail({ task, onClose, onSaved }: Props) {
                 </div>
               )}
 
-              {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+              {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
 
               <div className="mt-4 flex justify-end gap-2">
-                <Dialog.Close className="rounded-xl bg-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700">
+                <Dialog.Close className="flim-nav rounded-[8px] border border-[#d9d9d9] px-4 py-2 text-[#141414]">
                   Fechar
                 </Dialog.Close>
                 <button
                   onClick={save}
                   disabled={saving || !dirty}
-                  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+                  className="flim-nav rounded-[8px] bg-[#141414] px-4 py-2 text-[#ffffff] disabled:opacity-40"
                 >
                   {saving ? "Salvando…" : "Salvar"}
                 </button>

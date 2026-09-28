@@ -44,16 +44,16 @@ export default function ChatView({ sessionId }: Props) {
 
   return (
     <div className="flex h-full flex-col">
-      <p className="px-4 pt-2 text-[11px] text-zinc-600">Com contexto: tarefas, hábitos de hoje e notas.</p>
+      <p className="flim-nav px-4 pt-3 text-[#141414]/50">Com contexto: tarefas, hábitos de hoje e notas.</p>
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {messages.length === 0 && (
-          <p className="text-sm text-zinc-500">Nenhuma mensagem ainda. Diga olá.</p>
+          <p className="text-sm text-[#141414]/50">Nenhuma mensagem ainda. Diga olá.</p>
         )}
         {messages.map((m) => (
           <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
             <div
-              className={`max-w-[75%] whitespace-pre-wrap rounded-2xl px-4 py-2 text-sm ${
-                m.role === "user" ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-100"
+              className={`max-w-[75%] whitespace-pre-wrap rounded-[16px] border px-4 py-2 text-sm ${
+                m.role === "user" ? "border-[#141414] bg-[#141414] text-[#ffffff]" : "border-[#d9d9d9] bg-[#ffffff] text-[#141414]"
               }`}
             >
               {m.content}
@@ -62,19 +62,19 @@ export default function ChatView({ sessionId }: Props) {
         ))}
         <div ref={bottomRef} />
       </div>
-      {error && <p className="px-4 pb-1 text-sm text-red-400">{error}</p>}
-      <div className="flex gap-2 border-t border-zinc-800 p-3">
+      {error && <p className="px-4 pb-1 text-sm text-red-600">{error}</p>}
+      <div className="flex gap-2 border-t border-[#d9d9d9] bg-[#ffffff] p-3">
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
-          placeholder="Escreva sua mensagem…"
-          className="flex-1 rounded-xl bg-zinc-800 px-4 py-2 text-sm text-zinc-100 outline-none placeholder:text-zinc-500 focus:ring-1 focus:ring-blue-600"
+          placeholder="ESCREVA SUA MENSAGEM…"
+          className="flim-nav flex-1 rounded-[160px] border border-[#d9d9d9] bg-[#f5f5f5] px-5 py-2.5 text-[#141414] outline-none placeholder:text-[#141414]/40"
         />
         <button
           onClick={send}
           disabled={sending || !draft.trim()}
-          className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+          className="flim-nav rounded-[8px] bg-[#141414] px-4 py-2 text-[#ffffff] disabled:opacity-40"
         >
           {sending ? "…" : "Enviar"}
         </button>

@@ -10,6 +10,13 @@ type View = "hoje" | "chat" | "board" | "metricas";
 
 const EMPTY_BOARD: Board = { todo: [], doing: [], done: [] };
 
+const TABS: { id: View; label: string }[] = [
+  { id: "hoje", label: "Hoje" },
+  { id: "chat", label: "Chat" },
+  { id: "board", label: "Semana" },
+  { id: "metricas", label: "Métricas" },
+];
+
 export default function App() {
   const [view, setView] = useState<View>("hoje");
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -50,48 +57,32 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-zinc-950 text-zinc-100">
-      <aside className="flex w-60 flex-col border-r border-zinc-800">
-        <div className="flex gap-2 p-3">
-          <button
-            onClick={() => setView("hoje")}
-            className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold ${
-              view === "hoje" ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400"
-            }`}
-          >
-            Hoje
-          </button>
-          <button
-            onClick={() => setView("chat")}
-            className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold ${
-              view === "chat" ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400"
-            }`}
-          >
-            Chat
-          </button>
-          <button
-            onClick={() => setView("board")}
-            className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold ${
-              view === "board" ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400"
-            }`}
-          >
-            Semana
-          </button>
-          <button
-            onClick={() => setView("metricas")}
-            className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold ${
-              view === "metricas" ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-400"
-            }`}
-          >
-            Métricas
-          </button>
+    <div className="flex h-screen text-[#141414]">
+      <aside className="flex w-60 flex-col border-r border-[#d9d9d9] bg-[#ffffff]">
+        <div className="flex items-center gap-2 border-b border-[#d9d9d9] p-3">
+          <img src="/logo.png" alt="Flim" className="h-7 w-7" />
+          <span className="flim-nav font-bold">Copernico</span>
+          <span className="ml-auto h-2 w-2 rounded-full bg-[#30a81d]" title="online" />
         </div>
+        <nav className="flex flex-col gap-1 p-3">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setView(t.id)}
+              className={`flim-nav rounded-[8px] px-3 py-2 text-left ${
+                view === t.id ? "bg-[#141414] text-[#ffffff]" : "text-[#141414] hover:bg-[#e9e9e9]"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
 
         {view === "chat" && (
           <>
             <button
               onClick={newSession}
-              className="mx-3 mb-2 rounded-lg bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-700"
+              className="flim-nav mx-3 mb-2 rounded-[8px] bg-[#141414] px-3 py-2 text-[#ffffff]"
             >
               + Nova conversa
             </button>
@@ -100,8 +91,10 @@ export default function App() {
                 <div
                   key={s.id}
                   onClick={() => setActiveId(s.id)}
-                  className={`group flex cursor-pointer items-center gap-1 rounded-lg px-3 py-2 text-sm ${
-                    s.id === activeId ? "bg-zinc-800 text-white" : "text-zinc-400 hover:bg-zinc-900"
+                  className={`group flex cursor-pointer items-center gap-1 rounded-[8px] border px-3 py-2 text-sm ${
+                    s.id === activeId
+                      ? "border-[#141414] bg-[#f5f5f5] text-[#141414]"
+                      : "border-transparent text-[#141414] hover:bg-[#e9e9e9]"
                   }`}
                 >
                   <span className="flex-1 truncate">{s.title}</span>
@@ -110,7 +103,7 @@ export default function App() {
                       e.stopPropagation();
                       removeSession(s.id);
                     }}
-                    className="hidden text-zinc-600 hover:text-red-400 group-hover:block"
+                    className="hidden text-[#141414]/40 hover:text-red-600 group-hover:block"
                     title="Excluir conversa"
                   >
                     ✕
@@ -132,7 +125,7 @@ export default function App() {
             <ChatView key={activeId} sessionId={activeId} />
           ) : (
             <div className="flex h-full items-center justify-center">
-              <button onClick={newSession} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white">
+              <button onClick={newSession} className="flim-nav rounded-[8px] bg-[#141414] px-5 py-2.5 text-[#ffffff]">
                 Criar primeira conversa
               </button>
             </div>
