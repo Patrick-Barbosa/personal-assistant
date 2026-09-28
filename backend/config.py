@@ -1,4 +1,4 @@
-"""Runtime config. Same env vars and relative defaults as src-tauri/src/config.rs."""
+"""Runtime config. Minimal env vars with relative defaults."""
 import os
 from pathlib import Path
 
@@ -36,15 +36,10 @@ def _resolve(val: str | None, default_rel: str) -> Path:
     return ROOT / default_rel
 
 
-VAULT_PATH = _resolve(os.getenv("VAULT_PATH"), "cofres/default")
-OBSIDIAN_VAULT_PATH = _resolve(os.getenv("OBSIDIAN_VAULT_PATH"), "cofres/obsidian")
 DB_PATH = _resolve(os.getenv("DB_PATH"), "cofres/cache.db")
 
 DEEPSEEK_API_KEY = (os.getenv("DEEPSEEK_API_KEY") or "").strip()
 DEEPSEEK_BASE_URL = (os.getenv("DEEPSEEK_BASE_URL") or "https://api.deepseek.com").strip()
 DEEPSEEK_MODEL = (os.getenv("DEEPSEEK_MODEL") or "deepseek-chat").strip()
-
-GROQ_API_KEY = (os.getenv("GROQ_API_KEY") or "").strip()
-GROQ_MODEL = (os.getenv("GROQ_MODEL") or "whisper-large-v3-turbo").strip()
 
 BACKEND_PORT = int(os.getenv("BACKEND_PORT") or "8000")
