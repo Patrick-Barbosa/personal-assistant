@@ -1,0 +1,8 @@
+# Opcionais — o backend roda 100% stdlib sem nada disto.
+# Instale só o que for usar (voz completa / embeddings):
+#
+#   python3 -m pip install edge-tts groq sentence-transformers
+#
+# - edge-tts:            POST /api/tts (voz neural; sem ele a rota retorna 502 explicativo)
+# - groq:                alternativa ao STT stdlib (o backend já faz multipart puro; lib opcional)
+# - sentence-transformers: busca vetorial futura (hoje a busca é FTS-lite em backend/search.py)

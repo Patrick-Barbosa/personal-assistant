@@ -14,8 +14,13 @@
         } catch(e) {}
       })();
     </script>
+    <style>
+      /* Pintura sólida desde o primeiro frame (janela opaca; sem herança do era-overlay). */
+      html, body { margin: 0; padding: 0; background-color: #09090b; }
+      html.light, html.light body { background-color: #f4f4f5; }
+    </style>
   </head>
-  <body class="bg-transparent m-0 p-0 overflow-hidden select-none text-[var(--text-primary)] antialiased font-sans">
+  <body class="m-0 p-0 overflow-hidden select-none text-[var(--text-primary)] antialiased font-sans">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -32,6 +32,12 @@ pub struct McpManager {
     tools: Arc<RwLock<Vec<McpToolInfo>>>,
 }
 
+impl Default for McpManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl McpManager {
     pub fn new() -> Self {
         Self {
@@ -146,7 +152,7 @@ impl McpManager {
             let sid = server_id.clone();
             std::thread::spawn(move || {
                 let reader = BufReader::new(stderr);
-                for line in reader.lines().flatten() {
+                for line in reader.lines().map_while(Result::ok) {
                     // Limita tamanho do log para evitar spam
                     let truncated = if line.len() > 500 {
                         format!("{}…", &line[..500])

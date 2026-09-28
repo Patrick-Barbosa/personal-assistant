@@ -12,6 +12,7 @@ pub struct GroqSttClient {
     api_key: String,
     model: String,
     client: reqwest::Client,
+    db: Arc<std::sync::RwLock<Option<crate::db::SharedDatabase>>>,
 }
 
 impl GroqSttClient {
@@ -20,7 +21,28 @@ impl GroqSttClient {
             api_key: api_key.trim().to_string(),
             model: model.trim().to_string(),
             client: reqwest::Client::new(),
+            db: Arc::new(std::sync::RwLock::new(None)),
         }
+    }
+
+    pub fn set_database(&self, db: crate::db::SharedDatabase) {
+        if let Ok(mut guard) = self.db.write() {
+            *guard = Some(db);
+        }
+    }
+
+    pub fn get_api_key(&self) -> String {
+        if let Ok(guard) = self.db.read() {
+            if let Some(ref db) = *guard {
+                if let Ok(Some(k)) = db.get_setting("groq_api_key") {
+                    let trimmed = k.trim().to_string();
+                    if !trimmed.is_empty() {
+                        return trimmed;
+                    }
+                }
+            }
+        }
+        self.api_key.clone()
     }
 
     pub async fn transcribe(
@@ -28,8 +50,9 @@ impl GroqSttClient {
         audio_bytes: Vec<u8>,
         mime_type: Option<&str>,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        if self.api_key.is_empty() {
-            return Err("GROQ_API_KEY não configurada no arquivo .env".into());
+        let active_key = self.get_api_key();
+        if active_key.is_empty() {
+            return Err("GROQ_API_KEY não configurada no aplicativo nem no .env".into());
         }
 
         if audio_bytes.is_empty() {
@@ -61,7 +84,7 @@ impl GroqSttClient {
         let response = self
             .client
             .post("https://api.groq.com/openai/v1/audio/transcriptions")
-            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Authorization", format!("Bearer {}", active_key))
             .multipart(form)
             .send()
             .await?;

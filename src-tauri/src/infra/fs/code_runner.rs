@@ -3,6 +3,14 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use tempfile::NamedTempFile;
 
+fn get_python_binary() -> &'static str {
+    if Command::new("python").arg("--version").output().is_ok() {
+        "python"
+    } else {
+        "python3"
+    }
+}
+
 /// Executa um script Python associado a uma skill instalada
 pub fn execute_skill_script(
     skills_dir: &Path,
@@ -48,7 +56,8 @@ pub fn execute_skill_script(
         args.len()
     );
 
-    let mut cmd = Command::new("python");
+    let py_bin = get_python_binary();
+    let mut cmd = Command::new(py_bin);
     cmd.arg(&script_path);
     for arg in args {
         cmd.arg(arg);
@@ -111,7 +120,8 @@ pub fn execute_python_code(code: &str) -> Result<String, String> {
         temp_path
     );
 
-    let mut cmd = Command::new("python");
+    let py_bin = get_python_binary();
+    let mut cmd = Command::new(py_bin);
     cmd.arg(&temp_path);
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::piped());

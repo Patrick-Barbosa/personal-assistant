@@ -47,10 +47,10 @@ impl SkillManager {
                             if let Some(folder_name) = path.file_name() {
                                 let target = self.skills_dir.join(folder_name);
                                 if !target.exists() {
-                                    if fs::rename(&path, &target).is_err() {
-                                        if copy_dir_all(&path, &target).is_ok() {
-                                            let _ = fs::remove_dir_all(&path);
-                                        }
+                                    if fs::rename(&path, &target).is_err()
+                                        && copy_dir_all(&path, &target).is_ok()
+                                    {
+                                        let _ = fs::remove_dir_all(&path);
                                     }
                                     println!(
                                         "[SKILLS] Promoveu skill de '{}' para '{}'",
@@ -98,7 +98,7 @@ impl SkillManager {
         }
 
         // Ordena por nome
-        skills.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        skills.sort_by_key(|a| a.name.to_lowercase());
         skills
     }
 
@@ -176,12 +176,7 @@ impl SkillManager {
                             if fname.ends_with(".py")
                                 || fname.ends_with(".sh")
                                 || !fname.contains('.')
-                            {
-                                script_files.push(fname.to_string());
-                            } else if s_path
-                                .extension()
-                                .map(|e| e == "py" || e == "sh")
-                                .unwrap_or(false)
+                                || s_path.extension().is_some_and(|e| e == "py" || e == "sh")
                             {
                                 script_files.push(fname.to_string());
                             }
@@ -236,9 +231,8 @@ impl SkillManager {
     /// Faz o parse do conteúdo de SKILL.md extraindo YAML frontmatter e corpo (robusto a "---" dentro de valores)
     pub fn parse_skill_md(content: &str) -> (Option<String>, Option<String>, String) {
         let trimmed = content.trim();
-        if trimmed.starts_with("---") {
+        if let Some(rest) = trimmed.strip_prefix("---") {
             // Procura o fechamento "---" em linha isolada (evita split dentro de valores como "a --- b")
-            let rest = &trimmed[3..];
             // Normaliza quebras de linha para \n
             let rest_normalized = rest.replace("\r\n", "\n");
             if let Some(end_idx) = rest_normalized.find("\n---") {
@@ -246,7 +240,7 @@ impl SkillManager {
                 let after = &rest_normalized[end_idx + 4..]; // pula "\n---"
                                                              // Remove possíveis "---" restantes na linha e quebras
                 let body_part = after
-                    .trim_start_matches(|c| c == '-' || c == '\n' || c == '\r' || c == ' ')
+                    .trim_start_matches(['-', '\n', '\r', ' '])
                     .trim()
                     .to_string();
                 let mut name = None;

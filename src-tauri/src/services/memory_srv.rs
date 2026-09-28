@@ -1,4 +1,6 @@
 use crate::db::DbPool;
+use crate::domain::traits::stores::EntityIndexStore;
+use crate::infra::sqlite::SqliteVaultIndexRepo;
 use crate::vault::VaultManager;
 use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
 use rusqlite::params;
@@ -35,19 +37,10 @@ impl Indexer {
         pool: DbPool,
         vault_manager: Arc<VaultManager>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        // Tenta carregar o modelo multilíngue do spec (384 dimensões)
-        let init_opts = InitOptions::new(EmbeddingModel::ParaphraseMLMiniLML12V2)
-            .with_show_download_progress(false);
+        let init_opts =
+            InitOptions::new(EmbeddingModel::AllMiniLML6V2).with_show_download_progress(false);
 
-        let model = match TextEmbedding::try_new(init_opts) {
-            Ok(m) => m,
-            Err(err) => {
-                eprintln!("[WARN] Falha ao carregar ParaphraseMultilingualMiniLML12V2: {}. Tentando AllMiniLML6V2...", err);
-                let fallback_opts = InitOptions::new(EmbeddingModel::AllMiniLML6V2)
-                    .with_show_download_progress(false);
-                TextEmbedding::try_new(fallback_opts)?
-            }
-        };
+        let model = TextEmbedding::try_new(init_opts)?;
 
         Ok(Self {
             model: Arc::new(Mutex::new(model)),
@@ -274,6 +267,28 @@ impl Indexer {
 
         let (fm, body) = VaultManager::parse_note_file(path)?;
         let titulo = VaultManager::extract_obsidian_title(path, &body, &fm);
+
+        // `entities_index` é derivado e precisa ficar vivo mesmo em
+        // cache-hit do embedding: a nota pode virar/desvirar `tipo: entidade`
+        // sem alterar o texto indexado. Só caminhos do vault padrão entram
+        // (o cofre Obsidian permanece somente-leitura para escrita).
+        if let Ok(rel) = path.strip_prefix(&self.vault_manager.default_vault) {
+            let rel_str = rel.to_string_lossy().replace('\\', "/");
+            let entity_repo = SqliteVaultIndexRepo::new(self.pool.clone());
+            match crate::services::kanban_srv::entity_entry_from(&fm, &titulo, &rel_str) {
+                Some(entry) => {
+                    let _ = entity_repo.upsert_entity(&entry).map_err(|e| e.to_string());
+                }
+                None => {
+                    // Nota deixou de ser entity (ou nunca foi): só desvincula
+                    // do índice — o `.md` permanece intocado.
+                    let _ = entity_repo
+                        .delete_entity_by_path(&rel_str)
+                        .map_err(|e| e.to_string());
+                }
+            }
+        }
+
         let dynamic_meta = VaultManager::format_dynamic_metadata(&fm);
         let categoria = if vault_type == "obsidian" {
             VaultManager::extract_category(path, &self.vault_manager.obsidian_vault)
@@ -497,6 +512,21 @@ impl Indexer {
             }
         }
 
+        // 4. Poda o índice derivado de entities: sumiu a nota, some a linha
+        //    (nunca o contrário — o índice é reconstruível a qualquer momento).
+        let entity_repo = SqliteVaultIndexRepo::new(self.pool.clone());
+        let root = self.vault_manager.default_vault.clone();
+        match entity_repo.prune_missing_entities(|rel| root.join(rel).exists()) {
+            Ok(removed) if removed > 0 => {
+                println!(
+                    "[INDEX] entities_index: {} entradas órfãs removidas",
+                    removed
+                );
+            }
+            Ok(_) => {}
+            Err(e) => eprintln!("[INDEX WARN] Falha ao podar entities_index: {}", e),
+        }
+
         Ok((count_def, count_obs))
     }
 
@@ -565,7 +595,7 @@ impl Indexer {
         }
 
         // Combina cosseno (peso base 0.70) + boost léxico
-        (raw_cosine * 0.70 + boost).min(1.0).max(0.0)
+        (raw_cosine * 0.70 + boost).clamp(0.0, 1.0)
     }
 
     pub fn search_notes(
@@ -598,8 +628,8 @@ impl Indexer {
             for r in rows {
                 let (path_str, blob, dim, titulo) = r?;
                 let mut emb = Vec::with_capacity(dim as usize);
-                for chunk in blob.chunks_exact(4) {
-                    let val = f32::from_le_bytes(chunk.try_into().unwrap());
+                for chunk in blob.as_chunks::<4>().0 {
+                    let val = f32::from_le_bytes(*chunk);
                     emb.push(val);
                 }
                 let raw_score = Self::cosine_similarity(&query_vec, &emb);
@@ -665,8 +695,8 @@ impl Indexer {
             for r in rows {
                 let (path_str, blob, dim, titulo, categoria) = r?;
                 let mut emb = Vec::with_capacity(dim as usize);
-                for chunk in blob.chunks_exact(4) {
-                    let val = f32::from_le_bytes(chunk.try_into().unwrap());
+                for chunk in blob.as_chunks::<4>().0 {
+                    let val = f32::from_le_bytes(*chunk);
                     emb.push(val);
                 }
                 let raw_score = Self::cosine_similarity(&query_vec, &emb);

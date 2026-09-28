@@ -1,10 +1,6 @@
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
-pub fn emit_overlay_toggled(app: &AppHandle, visible: bool) -> Result<(), tauri::Error> {
-    app.emit("overlay-toggled", visible)
-}
-
 pub fn emit_inbox_updated(app: &AppHandle, unread_count: Option<i64>) -> Result<(), tauri::Error> {
     #[derive(Clone, Serialize)]
     struct InboxPayload {
@@ -51,34 +47,43 @@ pub fn emit_shortcut_conflict(app: &AppHandle, msg: &str) -> Result<(), tauri::E
     app.emit("shortcut-conflict", msg)
 }
 
+pub fn emit_wake_session_deleted(app: &AppHandle, session_id: &str) -> Result<(), tauri::Error> {
+    #[derive(Clone, Serialize)]
+    struct WakeSessionDeletedPayload {
+        #[serde(rename = "sessionId")]
+        session_id: String,
+    }
+    app.emit(
+        "wake-session-deleted",
+        WakeSessionDeletedPayload {
+            session_id: session_id.to_string(),
+        },
+    )
+}
+
 pub fn emit_wake_followup_chime(app: &AppHandle) -> Result<(), tauri::Error> {
     app.emit("wake-play-followup-chime", ())
 }
 
-pub fn emit_wake_debug_scores(
+/// Quadro Kanban (semanas, tarefas ou hábitos) mudou de estado.
+///
+/// `motivo` é um código estável (`task_created`, `task_moved`, `week_closed`,
+/// `habits_synced`, ...) — nunca texto livre exibido ao usuário.
+pub fn emit_kanban_changed(
     app: &AppHandle,
-    copernico: f32,
-    zefiro: Option<f32>,
-    lich: Option<f32>,
-    rms: f32,
-    threshold: f32,
+    week_id: &str,
+    motivo: &str,
 ) -> Result<(), tauri::Error> {
     #[derive(Clone, Serialize)]
-    struct DebugScoresPayload {
-        copernico: f32,
-        zefiro: Option<f32>,
-        lich: Option<f32>,
-        rms: f32,
-        threshold: f32,
+    struct KanbanChangedPayload {
+        week_id: String,
+        motivo: String,
     }
     app.emit(
-        "wake-debug-scores",
-        DebugScoresPayload {
-            copernico,
-            zefiro,
-            lich,
-            rms,
-            threshold,
+        "kanban-changed",
+        KanbanChangedPayload {
+            week_id: week_id.to_string(),
+            motivo: motivo.to_string(),
         },
     )
 }

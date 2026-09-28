@@ -10,18 +10,10 @@ pub struct FastEmbedModel {
 
 impl FastEmbedModel {
     pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let init_opts = InitOptions::new(EmbeddingModel::ParaphraseMLMiniLML12V2)
-            .with_show_download_progress(false);
+        let init_opts =
+            InitOptions::new(EmbeddingModel::AllMiniLML6V2).with_show_download_progress(false);
 
-        let model = match TextEmbedding::try_new(init_opts) {
-            Ok(m) => m,
-            Err(err) => {
-                eprintln!("[WARN] Falha ao carregar ParaphraseMultilingualMiniLML12V2: {}. Tentando AllMiniLML6V2...", err);
-                let fallback_opts = InitOptions::new(EmbeddingModel::AllMiniLML6V2)
-                    .with_show_download_progress(false);
-                TextEmbedding::try_new(fallback_opts)?
-            }
-        };
+        let model = TextEmbedding::try_new(init_opts)?;
 
         Ok(Self {
             model: Arc::new(Mutex::new(model)),

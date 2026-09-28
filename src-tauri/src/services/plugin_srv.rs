@@ -61,23 +61,22 @@ impl PluginRegistry {
                 &config_json,
             );
 
-            if is_enabled {
-                if manifest.provides.plugin_type == "tool" {
-                    if let Some(ref rt) = manifest.runtime {
-                        if rt.auto_start {
-                            let working_dir = manifest.folder_path.clone();
-                            let mcp_cfg = McpServerConfig {
-                                id: id.clone(),
-                                name: Some(manifest.plugin.name.clone()),
-                                command: rt.command.clone(),
-                                args: rt.args.clone(),
-                                working_dir: Some(working_dir),
-                                env: rt.env.clone(),
-                                auto_start: rt.auto_start,
-                            };
-                            let _ = self.mcp_manager.start_server(mcp_cfg);
-                        }
-                    }
+            if is_enabled
+                && manifest.provides.plugin_type == "tool"
+                && manifest.runtime.as_ref().is_some_and(|rt| rt.auto_start)
+            {
+                if let Some(ref rt) = manifest.runtime {
+                    let working_dir = manifest.folder_path.clone();
+                    let mcp_cfg = McpServerConfig {
+                        id: id.clone(),
+                        name: Some(manifest.plugin.name.clone()),
+                        command: rt.command.clone(),
+                        args: rt.args.clone(),
+                        working_dir: Some(working_dir),
+                        env: rt.env.clone(),
+                        auto_start: rt.auto_start,
+                    };
+                    let _ = self.mcp_manager.start_server(mcp_cfg);
                 }
             }
         }

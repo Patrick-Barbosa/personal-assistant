@@ -133,6 +133,9 @@ pub fn strip_markdown_for_tts(text: &str) -> String {
     let re_quote = Regex::new(r"(?m)^>\s*").unwrap();
     let text = re_quote.replace_all(&text, "");
 
+    let re_bullet = Regex::new(r"^\s*[-*•]\s+").unwrap();
+    let re_num = Regex::new(r"^\s*\d+\.\s+").unwrap();
+
     // Remove tables and bullets line by line
     let mut clean_lines = Vec::new();
     for line in text.lines() {
@@ -148,9 +151,7 @@ pub fn strip_markdown_for_tts(text: &str) -> String {
             }
             continue;
         }
-        let re_bullet = Regex::new(r"^\s*[-*•]\s+").unwrap();
         let l = re_bullet.replace(trimmed, "").to_string();
-        let re_num = Regex::new(r"^\s*\d+\.\s+").unwrap();
         let l = re_num.replace(&l, "").to_string();
         clean_lines.push(l);
     }
@@ -365,6 +366,7 @@ pub fn get_tool_definitions() -> serde_json::Value {
 pub struct LlmClient {
     config: Arc<AppConfig>,
     http: reqwest::Client,
+    db: std::sync::RwLock<Option<crate::db::SharedDatabase>>,
 }
 
 impl LlmClient {
@@ -373,7 +375,31 @@ impl LlmClient {
             .timeout(std::time::Duration::from_secs(45))
             .build()
             .unwrap_or_default();
-        Self { config, http }
+        Self {
+            config,
+            http,
+            db: std::sync::RwLock::new(None),
+        }
+    }
+
+    pub fn set_database(&self, db: crate::db::SharedDatabase) {
+        if let Ok(mut guard) = self.db.write() {
+            *guard = Some(db);
+        }
+    }
+
+    pub fn get_api_key(&self) -> String {
+        if let Ok(guard) = self.db.read() {
+            if let Some(ref db) = *guard {
+                if let Ok(Some(k)) = db.get_setting("deepseek_api_key") {
+                    let trimmed = k.trim().to_string();
+                    if !trimmed.is_empty() {
+                        return trimmed;
+                    }
+                }
+            }
+        }
+        self.config.deepseek_api_key.clone()
     }
 
     pub async fn chat_completion(
@@ -391,8 +417,9 @@ impl LlmClient {
         tools: Option<serde_json::Value>,
         options: ChatOptions,
     ) -> Result<ChatMessage, Box<dyn std::error::Error + Send + Sync>> {
-        if self.config.deepseek_api_key.is_empty() {
-            return Err("DEEPSEEK_API_KEY não configurada no .env".into());
+        let api_key = self.get_api_key();
+        if api_key.is_empty() {
+            return Err("DEEPSEEK_API_KEY não configurada no aplicativo nem no .env".into());
         }
 
         let url = format!(
@@ -428,10 +455,7 @@ impl LlmClient {
             let res = match self
                 .http
                 .post(&url)
-                .header(
-                    "Authorization",
-                    format!("Bearer {}", self.config.deepseek_api_key),
-                )
+                .header("Authorization", format!("Bearer {}", api_key))
                 .header("Content-Type", "application/json")
                 .json(&body)
                 .send()
@@ -504,8 +528,8 @@ impl LlmClient {
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let prompt = format!(
             "Crie um título curto (máx 40 caracteres) em português para esta conversa. Responda APENAS com o título, sem aspas, sem pontuação final.\nUsuário: {}\nAssistente: {}",
-            &user_msg.chars().take(200).collect::<String>(),
-            &assistant_resp.chars().take(200).collect::<String>()
+            user_msg.chars().take(200).collect::<String>(),
+            assistant_resp.chars().take(200).collect::<String>()
         );
 
         let messages = vec![ChatMessage {

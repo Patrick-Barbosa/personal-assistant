@@ -360,6 +360,24 @@ fn test_followup_expectation_classifies_real_wake_with_score_1() {
 }
 
 #[test]
+fn test_resolve_model_paths_missing_returns_err() {
+    use copernico_app_lib::infra::hardware::wake_inprocess::resolve_model_paths;
+    let temp_dir = tempfile::tempdir().unwrap();
+    let result = resolve_model_paths(temp_dir.path());
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_encode_pcm_to_wav() {
+    use copernico_app_lib::infra::hardware::wake_inprocess::encode_pcm_to_wav;
+    let pcm = vec![0i16; 1600]; // 100ms silence
+    let wav_bytes = encode_pcm_to_wav(&pcm, 16000).unwrap();
+    assert!(wav_bytes.len() > 44); // WAV header is 44 bytes
+    assert_eq!(&wav_bytes[0..4], b"RIFF");
+    assert_eq!(&wav_bytes[8..12], b"WAVE");
+}
+
+#[test]
 fn test_tts_speech_chunking() {
     // Frase curta não deve ser fragmentada
     let short_text = "Olá! Como posso te ajudar?";
@@ -599,6 +617,7 @@ fn test_cron_matcher() {
 
 #[test]
 fn test_tool_registry_builtin_and_filter() {
+    ensure_ort_initialized();
     use copernico_app_lib::indexer::Indexer;
     use copernico_app_lib::mcp::McpManager;
     use copernico_app_lib::tool_registry::ToolRegistry;
@@ -613,12 +632,16 @@ fn test_tool_registry_builtin_and_filter() {
     ));
     let idx = Arc::new(Indexer::new(db.get_pool(), vm.clone()).unwrap());
     let mcp = Arc::new(McpManager::new());
+    let kanban = Arc::new(copernico_app_lib::services::kanban_srv::KanbanService::new(
+        db.clone(),
+        vm.clone(),
+    ));
 
     let skills_dir = dir.path().join("skills");
-    let registry = ToolRegistry::new(db, vm, idx, mcp, skills_dir);
+    let registry = ToolRegistry::new(db, vm, idx, kanban, mcp, skills_dir);
     let merged = registry.get_merged_definitions();
     let arr = merged.as_array().expect("Deveria ser array de ferramentas");
-    assert_eq!(arr.len(), 15);
+    assert_eq!(arr.len(), 23);
 
     // Filtra para 2 ferramentas
     let filtered = registry.get_filtered_definitions(&["buscar_notas".into(), "ler_nota".into()]);
@@ -768,8 +791,28 @@ fn test_hybrid_scoring_boost() {
     assert_eq!(no_match_score, 0.60 * 0.70);
 }
 
+fn ensure_ort_initialized() {
+    static ORT_INIT: std::sync::Once = std::sync::Once::new();
+    ORT_INIT.call_once(|| {
+        let candidates = [
+            std::path::PathBuf::from("../motor_wake_word"),
+            std::path::PathBuf::from("motor_wake_word"),
+            std::path::PathBuf::from("."),
+        ];
+        for c in &candidates {
+            if let Ok((path, _)) =
+                copernico_app_lib::infra::hardware::wake_inprocess::resolve_model_paths(c)
+            {
+                let _ = inferencia::WakeWordModel::new(&[&path], 16000);
+                break;
+            }
+        }
+    });
+}
+
 #[test]
 fn test_perguntar_ao_usuario_tool_execution() {
+    ensure_ort_initialized();
     use copernico_app_lib::indexer::Indexer;
     use copernico_app_lib::tool_registry::{BuiltinTool, PerguntarAoUsuarioTool, ToolContext};
     use copernico_app_lib::vault::VaultManager;
@@ -786,9 +829,14 @@ fn test_perguntar_ao_usuario_tool_execution() {
 
     let ctx = ToolContext {
         db: db.clone(),
-        vault: vm,
+        vault: vm.clone(),
         indexer: idx,
         skills_dir: dir.path().join("skills"),
+        kanban: Arc::new(copernico_app_lib::services::kanban_srv::KanbanService::new(
+            db.clone(),
+            vm,
+        )),
+        app: std::sync::RwLock::new(None),
     };
 
     let tool = PerguntarAoUsuarioTool;
@@ -929,6 +977,7 @@ fn test_vault_create_inbox_note() {
 
 #[test]
 fn test_encerrar_sessao_tool() {
+    ensure_ort_initialized();
     use copernico_app_lib::tool_registry::{BuiltinTool, EncerrarSessaoTool, ToolContext};
     use std::sync::Arc;
 
@@ -942,10 +991,14 @@ fn test_encerrar_sessao_tool() {
         Arc::new(copernico_app_lib::indexer::Indexer::new(db.get_pool(), vm.clone()).unwrap());
 
     let ctx = ToolContext {
-        db,
-        vault: vm,
+        db: db.clone(),
+        vault: vm.clone(),
         indexer: idx,
         skills_dir: dir.path().join("skills"),
+        kanban: Arc::new(copernico_app_lib::services::kanban_srv::KanbanService::new(
+            db, vm,
+        )),
+        app: std::sync::RwLock::new(None),
     };
 
     let tool = EncerrarSessaoTool;
@@ -963,6 +1016,7 @@ fn test_encerrar_sessao_tool() {
 
 #[test]
 fn test_base_file_parsing_and_compilation() {
+    ensure_ort_initialized();
     let dir = tempdir().unwrap();
     let default_vault = dir.path().join("default");
     let obsidian_vault = dir.path().join("obsidian");
@@ -1847,6 +1901,7 @@ fn test_agent_inbox_decisions_block_rejected_not_created() {
 
 #[test]
 fn test_delete_tool_archives_before_delete() {
+    ensure_ort_initialized();
     use copernico_app_lib::indexer::Indexer;
     use copernico_app_lib::tool_registry::{BuiltinTool, DeletarNotaTool, ToolContext};
     use copernico_app_lib::vault::VaultManager;
@@ -1860,10 +1915,15 @@ fn test_delete_tool_archives_before_delete() {
     ));
     let idx = Arc::new(Indexer::new(db.get_pool(), vm.clone()).unwrap());
     let ctx = ToolContext {
-        db,
+        db: db.clone(),
         vault: vm.clone(),
         indexer: idx,
         skills_dir: dir.path().join("skills"),
+        kanban: Arc::new(copernico_app_lib::services::kanban_srv::KanbanService::new(
+            db,
+            vm.clone(),
+        )),
+        app: std::sync::RwLock::new(None),
     };
     vm.create_inbox_note("Nota Para Arquivar", "conteúdo a preservar", None, None)
         .unwrap();
@@ -1891,8 +1951,11 @@ async fn test_deepseek_live_call() {
     use tempfile::tempdir;
 
     let config = Arc::new(AppConfig::from_env());
-    if config.deepseek_api_key.is_empty() {
-        println!("Skipping: no DEEPSEEK_API_KEY");
+    if config.deepseek_api_key.is_empty()
+        || config.deepseek_api_key.contains("sua-chave")
+        || config.deepseek_api_key == "sk-xxx"
+    {
+        println!("Skipping: no valid DEEPSEEK_API_KEY");
         return;
     }
     let llm = LlmClient::new(config.clone());
@@ -1909,6 +1972,10 @@ async fn test_deepseek_live_call() {
         db.clone(),
         vm.clone(),
         idx.clone(),
+        Arc::new(copernico_app_lib::services::kanban_srv::KanbanService::new(
+            db.clone(),
+            vm.clone(),
+        )),
         mcp,
         dir.path().join("skills"),
     );
@@ -2327,4 +2394,1377 @@ fn test_thinking_manager_voice_filtering_and_invalidation() {
         .expect("Deve sortear clipe compatível");
     assert_eq!(picked_thalita.voice, "pt-BR-ThalitaNeural");
     assert_eq!(picked_thalita.id, "thk_thalita");
+}
+
+#[test]
+fn test_manual_recorder_stop_without_start_errors() {
+    use copernico_app_lib::infra::hardware::ManualRecorder;
+    let recorder = ManualRecorder::new();
+    assert!(recorder.stop(false).is_err());
+    assert!(recorder.stop(true).is_err());
+}
+
+#[test]
+fn test_manual_recorder_start_stop_never_panics() {
+    use copernico_app_lib::infra::hardware::ManualRecorder;
+    let recorder = ManualRecorder::new();
+    // Without a mic this is Err, with a mic Ok — both must be panic-free.
+    let _ = recorder.start();
+    let _ = recorder.stop(true);
+    // Slot is always cleared: a second stop errors, never panics.
+    assert!(recorder.stop(false).is_err());
+}
+
+#[test]
+fn test_manual_recorder_restart_replaces_session() {
+    use copernico_app_lib::infra::hardware::ManualRecorder;
+    let recorder = ManualRecorder::new();
+    let _ = recorder.start();
+    // Starting again must not panic and must replace the previous session.
+    let _ = recorder.start();
+    let _ = recorder.stop(true);
+}
+
+// ─── Kanban Semanal — Fase 1 ────────────────────────────────
+
+fn kanban_fixture() -> (
+    std::sync::Arc<Database>,
+    copernico_app_lib::services::kanban_srv::KanbanService,
+) {
+    let db = std::sync::Arc::new(Database::init(Path::new(":memory:")).unwrap());
+    let dir = tempdir().unwrap();
+    let vault = VaultManager::new(dir.path().join("default"), dir.path().join("obsidian"));
+    let srv = copernico_app_lib::services::kanban_srv::KanbanService::new(
+        db.clone(),
+        std::sync::Arc::new(vault),
+    );
+    (db, srv)
+}
+
+/// Fixture com o `TempDir` mantido vivo — usada nos testes da Fase 2 que
+/// leem e escrevem notas reais no vault padrão.
+fn kanban_vault_fixture() -> (
+    std::sync::Arc<Database>,
+    copernico_app_lib::services::kanban_srv::KanbanService,
+    tempfile::TempDir,
+) {
+    let db = std::sync::Arc::new(Database::init(Path::new(":memory:")).unwrap());
+    let dir = tempdir().unwrap();
+    let vault = VaultManager::new(dir.path().join("default"), dir.path().join("obsidian"));
+    let srv = copernico_app_lib::services::kanban_srv::KanbanService::new(
+        db.clone(),
+        std::sync::Arc::new(vault),
+    );
+    (db, srv, dir)
+}
+
+fn kanban_ghost_task(position: f64) -> copernico_app_lib::domain::models::KanbanTask {
+    use copernico_app_lib::domain::models::{KanbanTask, TaskColumn, TaskStatus};
+    KanbanTask {
+        id: "tarefa-fantasma".to_string(),
+        week_id: "2026-W39".to_string(),
+        titulo: "fantasma".to_string(),
+        note_path: None,
+        task_column: TaskColumn::Todo,
+        status: TaskStatus::Active,
+        carried_to: None,
+        position,
+        task_kind: copernico_app_lib::domain::models::TaskKind::Normal,
+        habit_id: None,
+        due_date: None,
+        created_at: String::new(),
+        updated_at: String::new(),
+    }
+}
+
+#[test]
+fn test_kanban_schema_created_on_init() {
+    let db = Database::init(Path::new(":memory:")).unwrap();
+    let conn = db.get_pool().get().unwrap();
+
+    for table in [
+        "kanban_weeks",
+        "kanban_tasks",
+        "kanban_task_notes",
+        "kanban_task_entities",
+        "entities_index",
+        "habits",
+    ] {
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+                [table],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1, "tabela '{}' ausente no bootstrap", table);
+    }
+
+    // Índice parcial único = idempotência da geração de tarefas de hábito.
+    let idx: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='uq_kanban_tasks_habit'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(idx, 1, "índice parcial único de hábito ausente");
+}
+
+#[test]
+fn test_iso_week_calculation_and_year_rollover() {
+    use chrono::NaiveDate;
+    use copernico_app_lib::services::kanban_srv::{
+        is_valid_iso_week, iso_week_bounds, iso_week_of, parse_week_id, week_id_for, week_id_of,
+    };
+
+    // Formato canônico: ano + W sempre com 2 dígitos.
+    assert_eq!(week_id_for(2026, 9), "2026-W09");
+    assert_eq!(week_id_for(2026, 39), "2026-W39");
+
+    assert_eq!(parse_week_id("2026-W39"), Some((2026, 39)));
+    assert_eq!(parse_week_id(" 2026-w9 "), Some((2026, 9)));
+    assert_eq!(parse_week_id("2026-39"), None);
+    assert_eq!(parse_week_id("W39"), None);
+    assert_eq!(parse_week_id("2026-W0"), None);
+    assert_eq!(parse_week_id("2026-W54"), None);
+
+    // Virada de ano ISO: 28/12/2020 e 01/01/2021 são ambas 2020-W53.
+    assert_eq!(
+        week_id_of(NaiveDate::from_ymd_opt(2020, 12, 28).unwrap()),
+        "2020-W53"
+    );
+    assert_eq!(
+        week_id_of(NaiveDate::from_ymd_opt(2021, 1, 1).unwrap()),
+        "2020-W53"
+    );
+    assert_eq!(
+        week_id_of(NaiveDate::from_ymd_opt(2021, 1, 4).unwrap()),
+        "2021-W01"
+    );
+    // 01/01/2015 (quinta-feira) já está na semana 1 de 2015…
+    assert_eq!(
+        week_id_of(NaiveDate::from_ymd_opt(2015, 1, 1).unwrap()),
+        "2015-W01"
+    );
+    // …enquanto 01/01/2016 (sexta-feira) ainda pertence a 2015-W53.
+    assert_eq!(
+        week_id_of(NaiveDate::from_ymd_opt(2016, 1, 1).unwrap()),
+        "2015-W53"
+    );
+
+    // Limites seg→dom; a semana 53 de 2020 atravessa o ano.
+    let (start, end) = iso_week_bounds(2020, 53).unwrap();
+    assert_eq!(start, NaiveDate::from_ymd_opt(2020, 12, 28).unwrap());
+    assert_eq!(end, NaiveDate::from_ymd_opt(2021, 1, 3).unwrap());
+
+    assert!(is_valid_iso_week(2020, 53));
+    assert!(!is_valid_iso_week(2014, 53));
+    assert_eq!(
+        iso_week_of(NaiveDate::from_ymd_opt(2026, 9, 24).unwrap()),
+        (2026, 39)
+    );
+}
+
+#[test]
+fn test_kanban_fractional_position_and_move() {
+    use copernico_app_lib::domain::models::TaskColumn;
+    use copernico_app_lib::services::kanban_srv::{target_position, KanbanService, POSITION_GAP};
+
+    // Cálculo puro da posição-alvo (ponto médio entre vizinhos).
+    assert_eq!(target_position(&[], 0), POSITION_GAP);
+    let twins = vec![kanban_ghost_task(1024.0), kanban_ghost_task(2048.0)];
+    assert_eq!(target_position(&twins, 0), 0.0);
+    assert_eq!(target_position(&twins, 1), 1536.0);
+    assert_eq!(target_position(&twins, 2), 3072.0);
+    // Índice fora de faixa é aparado, nunca panica.
+    assert_eq!(target_position(&twins, 99), 3072.0);
+
+    let (_db, srv): (_, KanbanService) = kanban_fixture();
+    let a = srv.create_task("A", TaskColumn::Todo, None).unwrap();
+    let b = srv.create_task("B", TaskColumn::Todo, None).unwrap();
+    let c = srv.create_task("C", TaskColumn::Todo, None).unwrap();
+
+    // Criação empilha no fim da coluna, sempre crescente.
+    assert!(a.position < b.position);
+    assert!(b.position < c.position);
+    let (_pos_a, pos_b, pos_c) = (a.position, b.position, c.position);
+
+    // Mover A para a 2ª casa da própria coluna: fica entre B e C…
+    let moved = srv.move_task(&a.id, TaskColumn::Todo, 1).unwrap();
+    assert!(moved.position > pos_b && moved.position < pos_c);
+    // …sem reescrever a posição de ninguém.
+    assert_eq!(srv.get_task(&b.id).unwrap().position, pos_b);
+    assert_eq!(srv.get_task(&c.id).unwrap().position, pos_c);
+
+    // Coluna de destino vazia recebe a posição-base.
+    let solo = srv.move_task(&c.id, TaskColumn::Doing, 0).unwrap();
+    assert_eq!(solo.position, POSITION_GAP);
+    assert_eq!(solo.task_column, TaskColumn::Doing);
+    // Mover coluna não altera o ciclo de vida.
+    assert_eq!(
+        copernico_app_lib::domain::traits::stores::KanbanStore::get_task(srv.repo(), &solo.id)
+            .unwrap()
+            .unwrap()
+            .status,
+        copernico_app_lib::domain::models::TaskStatus::Active
+    );
+}
+
+#[test]
+fn test_closed_week_rejects_every_mutation() {
+    use copernico_app_lib::domain::models::TaskColumn;
+    use copernico_app_lib::domain::models::WeekStatus;
+    use copernico_app_lib::domain::traits::stores::KanbanStore;
+
+    let (_db, srv) = kanban_fixture();
+    let week = srv.ensure_open_week().unwrap();
+    let task = srv.create_task("Pendente", TaskColumn::Todo, None).unwrap();
+
+    srv.repo()
+        .set_week_status(&week.id, WeekStatus::Closed, Some("2026-09-27T23:00:00Z"))
+        .unwrap();
+
+    let expected = format!("semana fechada: {}", week.id);
+    assert_eq!(
+        srv.create_task("Nova", TaskColumn::Todo, None)
+            .unwrap_err()
+            .to_string(),
+        expected
+    );
+    assert_eq!(
+        srv.move_task(&task.id, TaskColumn::Doing, 0)
+            .unwrap_err()
+            .to_string(),
+        expected
+    );
+    assert_eq!(
+        srv.update_task(&task.id, "Renomeada", None)
+            .unwrap_err()
+            .to_string(),
+        expected
+    );
+    assert_eq!(srv.delete_task(&task.id).unwrap_err().to_string(), expected);
+
+    // Mutations da Fase 2 (nota da tarefa) caem no mesmo contrato tipado.
+    assert_eq!(
+        srv.create_task_note(&task.id).unwrap_err().to_string(),
+        expected
+    );
+    assert_eq!(
+        srv.save_task_note(&task.id, "corpo")
+            .unwrap_err()
+            .to_string(),
+        expected
+    );
+
+    // Leitura segue possível: a semana fechada é somente leitura.
+    let board = srv.list_board(None).unwrap();
+    assert_eq!(board.week.id, week.id);
+    assert_eq!(board.week.status, WeekStatus::Closed);
+    assert_eq!(board.tasks.len(), 1);
+}
+
+#[test]
+fn test_listar_kanban_scope_defaults_to_open_week_only() {
+    use chrono::{Local, NaiveDate};
+    use copernico_app_lib::domain::errors::DomainError;
+    use copernico_app_lib::domain::models::{TaskColumn, WeekStatus};
+    use copernico_app_lib::domain::traits::stores::KanbanStore;
+    use copernico_app_lib::services::kanban_srv::week_id_of;
+
+    let (_db, srv) = kanban_fixture();
+
+    // Sem semana informada, o default é a semana corrente (aberta).
+    let first = srv.list_board(None).unwrap();
+    assert_eq!(first.week.status, WeekStatus::Open);
+    assert_eq!(first.week.id, week_id_of(Local::now().date_naive()));
+
+    let task = srv
+        .create_task("Comprar café", TaskColumn::Todo, None)
+        .unwrap();
+    assert_eq!(task.week_id, first.week.id);
+
+    // Uma semana antiga fechada existe, mas NUNCA vaza no escopo default.
+    let old_date = NaiveDate::from_ymd_opt(2019, 9, 2).unwrap();
+    let old = srv.get_or_create_week(old_date).unwrap();
+    assert_ne!(old.id, first.week.id);
+    srv.repo()
+        .set_week_status(&old.id, WeekStatus::Closed, Some("2019-09-08T23:00:00Z"))
+        .unwrap();
+
+    let scoped = srv.list_board(None).unwrap();
+    assert_eq!(scoped.week.id, first.week.id);
+    assert!(scoped.tasks.iter().all(|t| t.week_id == first.week.id));
+
+    // Histórico só com pedido explícito de semana.
+    let explicit = srv.list_board(Some(&old.id)).unwrap();
+    assert_eq!(explicit.week.id, old.id);
+    assert_eq!(explicit.week.status, WeekStatus::Closed);
+    assert!(explicit.tasks.is_empty());
+
+    // Semana inexistente ou malformada → erro tipado, nunca semana errada.
+    assert!(matches!(
+        srv.list_board(Some("1999-W10")).unwrap_err(),
+        DomainError::NotFound(_)
+    ));
+    assert!(matches!(
+        srv.list_board(Some("qualquer")).unwrap_err(),
+        DomainError::InvalidInput(_)
+    ));
+    assert!(matches!(
+        srv.list_board(Some("2014-W53")).unwrap_err(),
+        DomainError::InvalidInput(_)
+    ));
+}
+
+#[test]
+fn test_create_task_validates_input_and_habits_get_no_note() {
+    use copernico_app_lib::domain::errors::DomainError;
+    use copernico_app_lib::domain::models::{TaskColumn, TaskKind};
+
+    let (_db, srv) = kanban_fixture();
+
+    assert!(matches!(
+        srv.create_task("   ", TaskColumn::Todo, None).unwrap_err(),
+        DomainError::InvalidInput(_)
+    ));
+    assert!(matches!(
+        srv.create_task("Ok", TaskColumn::Todo, Some("31/12/2026"))
+            .unwrap_err(),
+        DomainError::InvalidInput(_)
+    ));
+
+    let task = srv
+        .create_task("  Comprar pão  ", TaskColumn::Todo, Some("2026-09-30"))
+        .unwrap();
+    assert_eq!(task.titulo, "Comprar pão");
+    assert_eq!(task.due_date.as_deref(), Some("2026-09-30"));
+    assert_eq!(task.task_kind, TaskKind::Normal);
+    // Tarefa normal nasce sem nota: o vínculo só existe após o editor (Fase 2).
+    assert_eq!(task.note_path, None);
+}
+
+// ─── Kanban Semanal — Fase 2: editor + entities ─────────────
+
+#[test]
+fn test_task_note_frontmatter_roundtrip_and_delete_keeps_file() {
+    use copernico_app_lib::domain::models::{TaskColumn, WeekStatus};
+    use copernico_app_lib::domain::traits::stores::KanbanStore;
+
+    let (_db, srv, dir) = kanban_vault_fixture();
+
+    let task = srv
+        .create_task("Preparar reunião", TaskColumn::Todo, None)
+        .unwrap();
+    let task = srv.create_task_note(&task.id).unwrap();
+    let rel = task.note_path.clone().expect("tarefa deveria ter nota");
+    let abs = dir.path().join("default").join(&rel);
+    assert!(abs.exists(), "nota canônica ausente: {}", abs.display());
+
+    // Frontmatter round-trip: `tipo: tarefa` + chaves extras sobrevivem ao YAML.
+    let (fm, _body) = VaultManager::parse_note_file(&abs).unwrap();
+    assert_eq!(fm.tipo.as_deref(), Some("tarefa"));
+    assert_eq!(
+        fm.extra.get("kanban_id").and_then(|v| v.as_str()),
+        Some(task.id.as_str())
+    );
+    assert_eq!(
+        fm.extra.get("semana").and_then(|v| v.as_str()),
+        Some(task.week_id.as_str())
+    );
+
+    // Escrita do editor preserva o frontmatter e devolve o corpo puro.
+    srv.save_task_note(&task.id, "- item **forte**\n- [[Alguma Nota]]")
+        .unwrap();
+    let body = srv.get_task_note(&task.id).unwrap().expect("corpo");
+    assert!(body.contains("**forte**"), "corpo não foi salvo: {}", body);
+    let (fm_after, body_after) = VaultManager::parse_note_file(&abs).unwrap();
+    assert_eq!(fm_after.tipo.as_deref(), Some("tarefa"));
+    assert_eq!(body_after, body);
+
+    // Idempotência: segunda criação não duplica nem recria arquivo.
+    let again = srv.create_task_note(&task.id).unwrap();
+    assert_eq!(again.note_path.as_deref(), Some(rel.as_str()));
+
+    // Excluir a tarefa desvincula do SQLite, mas o `.md` permanece no cofre.
+    srv.delete_task(&task.id).unwrap();
+    assert!(srv.get_task(&task.id).is_err());
+    assert!(abs.exists(), "excluir tarefa nunca apaga a nota do cofre");
+    let (fm_final, _) = VaultManager::parse_note_file(&abs).unwrap();
+    assert_eq!(fm_final.tipo.as_deref(), Some("tarefa"));
+
+    // Semana fechada também rejeita a criação de nota (contrato tipado).
+    let other = srv.create_task("Outra", TaskColumn::Todo, None).unwrap();
+    srv.repo()
+        .set_week_status(
+            &task.week_id,
+            WeekStatus::Closed,
+            Some("2026-09-27T23:00:00Z"),
+        )
+        .unwrap();
+    assert_eq!(
+        srv.create_task_note(&other.id).unwrap_err().to_string(),
+        format!("semana fechada: {}", task.week_id)
+    );
+}
+
+#[test]
+fn test_entity_index_links_and_rebuild() {
+    use copernico_app_lib::domain::models::{EntitySubtipo, TaskColumn};
+
+    let (_db, srv, dir) = kanban_vault_fixture();
+    let task = srv
+        .create_task("Planejar viagem", TaskColumn::Todo, None)
+        .unwrap();
+
+    // Entity nasce como nota canônica + upsert imediato no índice derivado.
+    let entry = srv
+        .create_entity("Ana Silva", EntitySubtipo::Pessoa)
+        .unwrap();
+    let abs = dir.path().join("default").join(&entry.note_path);
+    assert!(abs.exists(), "nota canônica da entity ausente");
+    let (fm, _) = VaultManager::parse_note_file(&abs).unwrap();
+    assert_eq!(fm.tipo.as_deref(), Some("entidade"));
+    assert_eq!(
+        fm.extra.get("subtipo").and_then(|v| v.as_str()),
+        Some("pessoa")
+    );
+    let listed = srv.list_entities(Some("pessoa"), None).unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].id, entry.id);
+    // Busca por título.
+    assert_eq!(srv.list_entities(None, Some("silva")).unwrap().len(), 1);
+    assert_eq!(
+        srv.list_entities(None, Some("inexistente")).unwrap().len(),
+        0
+    );
+
+    // Entity desconhecida não vincula (anti-alucinação do agente).
+    assert!(srv.link_task_entity(&task.id, "nao-existe").is_err());
+
+    // Vincular/desvincular entity reflete nos vínculos da tarefa.
+    let links = srv.link_task_entity(&task.id, &entry.id).unwrap();
+    assert_eq!(links.entities.len(), 1);
+    let links = srv.unlink_task_entity(&task.id, &entry.id).unwrap();
+    assert!(links.entities.is_empty());
+    let links = srv.link_task_entity(&task.id, &entry.id).unwrap();
+    assert_eq!(links.entities.len(), 1);
+
+    // Vincular nota existente do vault padrão (só vínculo — sem escrita nela).
+    let note_abs = dir.path().join("default").join("Ideias_de_viagem.md");
+    std::fs::write(&note_abs, "# Ideias de viagem\n").unwrap();
+    let links = srv.link_task_note(&task.id, "Ideias_de_viagem.md").unwrap();
+    assert!(links.notes.contains(&"Ideias_de_viagem.md".to_string()));
+    // Nota fora do vault padrão é rejeitada.
+    assert!(srv.link_task_note(&task.id, "../fora/cofre.md").is_err());
+
+    // O board devolve os vínculos por tarefa (chips sem N+1 de IPC).
+    let board = srv.list_board(None).unwrap();
+    let board_links = board
+        .links
+        .iter()
+        .find(|l| l.task_id == task.id)
+        .expect("links da tarefa presentes no board");
+    assert_eq!(board_links.notes.len(), 1);
+    assert_eq!(board_links.entities.len(), 1);
+
+    // Rebuild: índice é derivado — notas existentes sobrevivem ao rebuild…
+    let rebuilt = srv.rebuild_entities_index().unwrap();
+    assert_eq!(rebuilt, 1);
+    assert_eq!(srv.list_entities(None, None).unwrap().len(), 1);
+
+    // …e a linha órfã some quando a nota some (o app nunca apaga `.md` por
+    // conta própria; aqui o teste simula o usuário apagando o arquivo).
+    std::fs::remove_file(&abs).unwrap();
+    srv.rebuild_entities_index().unwrap();
+    assert!(srv.list_entities(None, None).unwrap().is_empty());
+    // O vínculo da tarefa permanece apenas como histórico vazio na resolução.
+    let links = srv.task_links(&task.id).unwrap();
+    assert!(links.entities.is_empty());
+}
+
+// ─── Kanban Semanal — Fase 3 (tools, fechamento, Inbox) ─────
+
+#[test]
+fn test_listar_kanban_scope_default_vs_explicit() {
+    ensure_ort_initialized();
+    use chrono::Local;
+    use copernico_app_lib::domain::models::TaskColumn;
+    use copernico_app_lib::indexer::Indexer;
+    use copernico_app_lib::mcp::McpManager;
+    use copernico_app_lib::services::kanban_srv::KanbanService;
+    use copernico_app_lib::tool_registry::ToolRegistry;
+    use std::sync::Arc;
+
+    let dir = tempdir().unwrap();
+    let db = Arc::new(Database::init(Path::new(":memory:")).unwrap());
+    let vm = Arc::new(VaultManager::new(
+        dir.path().join("default"),
+        dir.path().join("obsidian"),
+    ));
+    let kanban = Arc::new(KanbanService::new(db.clone(), vm.clone()));
+    let idx = Arc::new(Indexer::new(db.get_pool(), vm.clone()).unwrap());
+    let mcp = Arc::new(McpManager::new());
+    let reg = ToolRegistry::new(db, vm, idx, kanban.clone(), mcp, dir.path().join("skills"));
+
+    // Semana aberta com uma tarefa.
+    let task = kanban
+        .create_task("Comprar café", TaskColumn::Todo, None)
+        .unwrap();
+
+    // Padrão (sem `semana`) ⇒ SOMENTE a semana aberta — nunca histórico.
+    let v: serde_json::Value = serde_json::from_str(&reg.execute("listar_kanban", "{}")).unwrap();
+    assert_eq!(v["sucesso"], true);
+    assert_eq!(v["escopo"], "aberta");
+    assert_eq!(v["semana"]["id"].as_str().unwrap(), task.week_id);
+    assert_eq!(v["tarefas"].as_array().unwrap().len(), 1);
+
+    // Explícita ⇒ aquela semana exata (histórico sob pedido).
+    let past = kanban
+        .get_or_create_week(Local::now().date_naive() - chrono::Duration::days(30))
+        .unwrap();
+    assert_ne!(past.id, task.week_id);
+    let args = serde_json::json!({ "semana": past.id }).to_string();
+    let v2: serde_json::Value = serde_json::from_str(&reg.execute("listar_kanban", &args)).unwrap();
+    assert_eq!(v2["sucesso"], true);
+    assert_eq!(v2["escopo"], "explicito");
+    assert_eq!(v2["semana"]["id"].as_str().unwrap(), past.id);
+    assert_eq!(v2["tarefas"].as_array().unwrap().len(), 0);
+
+    // Escrita via tool: criar_tarefa entra na semana aberta.
+    let args = serde_json::json!({ "titulo": "Viajar" }).to_string();
+    let v3: serde_json::Value = serde_json::from_str(&reg.execute("criar_tarefa", &args)).unwrap();
+    assert_eq!(v3["sucesso"], true);
+    assert_eq!(v3["semana"].as_str().unwrap(), task.week_id);
+}
+
+#[test]
+fn test_close_week_rollover_and_carry_cancel_idempotent() {
+    use chrono::Local;
+    use copernico_app_lib::domain::models::{
+        KanbanTask, TaskColumn, TaskKind, TaskStatus, WeekStatus,
+    };
+    use copernico_app_lib::domain::traits::KanbanStore;
+
+    let (db, srv, _dir) = kanban_vault_fixture();
+
+    // Semana passada ainda "aberta" (caso de app desligado no fim de semana).
+    let past = srv
+        .get_or_create_week(Local::now().date_naive() - chrono::Duration::days(30))
+        .unwrap();
+
+    let mk_task = |id: &str, titulo: &str, column: TaskColumn, kind: TaskKind| KanbanTask {
+        id: id.to_string(),
+        week_id: past.id.clone(),
+        titulo: titulo.to_string(),
+        note_path: None,
+        task_column: column,
+        status: TaskStatus::Active,
+        carried_to: None,
+        position: 1024.0,
+        task_kind: kind,
+        habit_id: if kind == TaskKind::Habit {
+            Some("habito-x".to_string())
+        } else {
+            None
+        },
+        due_date: None,
+        created_at: String::new(),
+        updated_at: String::new(),
+    };
+    srv.repo()
+        .insert_task(&mk_task(
+            "t-pend-1",
+            "Pendência A",
+            TaskColumn::Todo,
+            TaskKind::Normal,
+        ))
+        .unwrap();
+    srv.repo()
+        .insert_task(&mk_task(
+            "t-pend-2",
+            "Pendência B",
+            TaskColumn::Doing,
+            TaskKind::Normal,
+        ))
+        .unwrap();
+    srv.repo()
+        .insert_task(&mk_task(
+            "t-done",
+            "Concluída",
+            TaskColumn::Done,
+            TaskKind::Normal,
+        ))
+        .unwrap();
+    srv.repo()
+        .insert_task(&mk_task(
+            "t-habit",
+            "Hábito pendente",
+            TaskColumn::Todo,
+            TaskKind::Habit,
+        ))
+        .unwrap();
+
+    // Fechamento: 1 item por pendência (done e hábito ficam de fora).
+    let item_ids = srv.close_week(&past.id).unwrap();
+    assert_eq!(item_ids.len(), 2);
+
+    let closed_week = srv.repo().get_week(&past.id).unwrap().unwrap();
+    assert_eq!(closed_week.status, WeekStatus::Closed);
+    assert!(closed_week.closed_at.is_some());
+
+    // Idempotente: fechar de novo não gera itens novos.
+    assert!(srv.close_week(&past.id).unwrap().is_empty());
+
+    // Itens `kanban_rollover` com decisão obrigatória e payload/task_id corretos.
+    let items = db.list_inbox_items().unwrap();
+    let rollover: Vec<_> = items
+        .iter()
+        .filter(|i| i.item_type == "kanban_rollover")
+        .collect();
+    assert_eq!(rollover.len(), 2);
+    for item in &rollover {
+        assert!(item.requires_decision);
+        let (task_id, week_id) =
+            copernico_app_lib::services::kanban_srv::KanbanService::parse_rollover_content(
+                &item.content,
+            )
+            .unwrap();
+        assert_eq!(week_id, past.id);
+        assert!(task_id == "t-pend-1" || task_id == "t-pend-2");
+    }
+
+    // Semana fechada é read-only para o board…
+    let err = srv
+        .move_task("t-pend-1", TaskColumn::Done, 0)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(err, format!("semana fechada: {}", past.id));
+
+    // …mas as decisões do Inbox (carry/cancel) são permitidas.
+    let new_task = srv
+        .carry_task("t-pend-1")
+        .unwrap()
+        .expect("aceite cria task nova na semana aberta");
+    assert_ne!(new_task.week_id, past.id);
+    assert_eq!(new_task.task_column, TaskColumn::Todo);
+    assert_eq!(new_task.status, TaskStatus::Active);
+    let old = srv.get_task("t-pend-1").unwrap();
+    assert_eq!(old.status, TaskStatus::Carried);
+    assert_eq!(old.carried_to.as_deref(), Some(new_task.week_id.as_str()));
+
+    // Idempotência: repetir o aceite não duplica nada.
+    assert!(srv.carry_task("t-pend-1").unwrap().is_none());
+    assert!(srv.carry_task("t-pend-1").unwrap().is_none());
+
+    // Recusa cancela (idempotente: `false` na segunda vez).
+    assert!(srv.cancel_task("t-pend-2").unwrap());
+    assert!(!srv.cancel_task("t-pend-2").unwrap());
+    assert_eq!(
+        srv.get_task("t-pend-2").unwrap().status,
+        TaskStatus::Cancelled
+    );
+
+    // Hábito nunca entra no rollover.
+    let err = srv.carry_task("t-habit").unwrap_err().to_string();
+    assert!(err.contains("hábito"));
+}
+
+#[test]
+fn test_ensure_weeks_closed_only_past_deadline() {
+    use chrono::Local;
+    use copernico_app_lib::domain::models::WeekStatus;
+    use copernico_app_lib::domain::traits::KanbanStore;
+
+    let (_db, srv, _dir) = kanban_vault_fixture();
+    let past = srv
+        .get_or_create_week(Local::now().date_naive() - chrono::Duration::days(30))
+        .unwrap();
+    // Semana de hoje explícita — sem ela, `ensure_open_week` devolveria a
+    // stale passada (ainda aberta) como se fosse a atual.
+    let current = srv.get_or_create_week(Local::now().date_naive()).unwrap();
+    assert_ne!(past.id, current.id);
+
+    let closed = srv.ensure_weeks_closed().unwrap();
+    assert!(
+        closed.contains(&past.id),
+        "semana vencida (domingo 23h atrás) deve fechar mesmo com o app parado"
+    );
+    let past_now = srv.repo().get_week(&past.id).unwrap().unwrap();
+    assert_eq!(past_now.status, WeekStatus::Closed);
+
+    // A semana atual só fecha se o relógio já passou do domingo 23h dela.
+    if !closed.contains(&current.id) {
+        let cur = srv.repo().get_week(&current.id).unwrap().unwrap();
+        assert_eq!(cur.status, WeekStatus::Open);
+    }
+
+    // Idempotente: já-fechada não aparece de novo.
+    let closed_again = srv.ensure_weeks_closed().unwrap();
+    assert!(!closed_again.contains(&past.id));
+}
+
+// ─── Hábitos — Fase 4 ───────────────────────────────────────
+
+#[test]
+fn test_habit_cron_day_matching() {
+    use copernico_app_lib::domain::models::habit as rules;
+
+    // Calendário de referência: 2026-09-21=Seg … 2026-09-27=Dom.
+    let (sy, sm, sd, sw) = (2026, 9, 21, 1u32);
+    let (dy, dm, dd, dw) = (2026, 9, 27, 0u32);
+    let (ty, tm, td, tw) = (2026, 9, 22, 2u32);
+    let (qy, qm, qd, qw) = (2026, 9, 24, 4u32);
+
+    // Segunda apenas.
+    assert!(rules::matches_date("0 6 * * 1", sy, sm, sd, sw).unwrap());
+    assert!(!rules::matches_date("0 6 * * 1", dy, dm, dd, dw).unwrap());
+    // Terças e quintas ("correr terças e quintas" → 0 6 * * 2,4).
+    assert!(rules::matches_date("0 6 * * 2,4", ty, tm, td, tw).unwrap());
+    assert!(rules::matches_date("0 6 * * 2,4", qy, qm, qd, qw).unwrap());
+    assert!(!rules::matches_date("0 6 * * 2,4", sy, sm, sd, sw).unwrap());
+    // Alias de domingo (7 ≡ 0).
+    assert!(rules::matches_date("0 6 * * 7", dy, dm, dd, dw).unwrap());
+    assert!(!rules::matches_date("0 6 * * 7", ty, tm, td, tw).unwrap());
+    // dom/dow ambos restringindo ⇒ união (dia 15 OU qualquer segunda).
+    assert!(rules::matches_date("0 0 15 * 1", 2026, 9, 15, 2).unwrap());
+    assert!(rules::matches_date("0 0 15 * 1", sy, sm, sd, sw).unwrap());
+    assert!(!rules::matches_date("0 0 15 * 1", 2026, 9, 16, 3).unwrap());
+    // Todo dia (`* *`).
+    assert!(rules::matches_date("0 9 * * *", dy, dm, dd, dw).unwrap());
+    // Mês restringe.
+    assert!(!rules::matches_date("0 9 1 10 *", sy, sm, sd, sw).unwrap());
+    // Cron malformado é erro tipado, não pânico.
+    assert!(rules::matches_date("não é cron", sy, sm, sd, sw).is_err());
+    assert!(rules::matches_date("0 9 * *", sy, sm, sd, sw).is_err());
+}
+
+#[test]
+fn test_create_habit_validates_cron_and_color() {
+    let (_db, srv, _dir) = kanban_vault_fixture();
+    let habit_srv = srv.habit();
+
+    assert!(habit_srv.create_habit("  ", "0 9 * * *", None).is_err());
+    assert!(habit_srv
+        .create_habit("Sem cron", "não-cron", None)
+        .is_err());
+    assert!(habit_srv
+        .create_habit("Cor ruim", "0 9 * * *", Some("#zzz"))
+        .is_err());
+
+    let h = habit_srv
+        .create_habit("  Beber água  ", " 0 9 * * * ", None)
+        .unwrap();
+    assert_eq!(h.titulo, "Beber água");
+    assert_eq!(h.cron_expr, "0 9 * * *");
+    assert_eq!(h.cor, "#22c55e", "cor padrão verde");
+    assert!(h.ativo);
+    assert_eq!(h.streak_atual, 0);
+}
+
+#[test]
+fn test_update_habit_edits_fields_and_validates() {
+    let (_db, srv, _dir) = kanban_vault_fixture();
+    let habit_srv = srv.habit();
+    let h = habit_srv
+        .create_habit("Beber água", "0 9 * * *", None)
+        .unwrap();
+
+    // Inexistente ⇒ NotFound tipado; validações espelham a criação.
+    assert!(habit_srv
+        .update_habit("nope", "Qualquer", "0 9 * * *", None)
+        .is_err());
+    assert!(habit_srv
+        .update_habit(&h.id, "  ", "0 9 * * *", None)
+        .is_err());
+    assert!(habit_srv
+        .update_habit(&h.id, "Novo", "cron-ruim", None)
+        .is_err());
+    assert!(habit_srv
+        .update_habit(&h.id, "Novo", "0 9 * * *", Some("#zzz"))
+        .is_err());
+
+    let updated = habit_srv
+        .update_habit(&h.id, "  Alongamento  ", "30 7 * * 1,3", Some("#3b82f6"))
+        .unwrap();
+    assert_eq!(updated.id, h.id, "edição preserva a identidade");
+    assert_eq!(updated.titulo, "Alongamento");
+    assert_eq!(updated.cron_expr, "30 7 * * 1,3");
+    assert_eq!(updated.cor, "#3b82f6");
+    assert!(updated.ativo, "edição não mexe no estado ativo/pausado");
+
+    // Persistência: a listagem enxerga a edição.
+    let listed = habit_srv.list_habits().unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].titulo, "Alongamento");
+    assert_eq!(listed[0].cron_expr, "30 7 * * 1,3");
+    assert_eq!(listed[0].cor, "#3b82f6");
+}
+
+#[test]
+fn test_habit_sync_generates_task_idempotently() {
+    let (_db, srv, _dir) = kanban_vault_fixture();
+    // Cron que casa com qualquer dia ⇒ gera hoje, seja qual for o dia do teste.
+    let habit = srv
+        .habit()
+        .create_habit("Beber água", "0 9 * * *", None)
+        .unwrap();
+
+    assert_eq!(srv.habit().sync_habit_tasks_today().unwrap(), 1);
+    // Tick N× = 1 task (checagem prévia + índice único parcial).
+    assert_eq!(srv.habit().sync_habit_tasks_today().unwrap(), 0);
+    assert_eq!(srv.habit().sync_habit_tasks_today().unwrap(), 0);
+
+    let board = srv.list_board(None).unwrap();
+    assert_eq!(board.tasks.len(), 1);
+    let task = &board.tasks[0];
+    assert_eq!(
+        task.task_kind,
+        copernico_app_lib::domain::models::TaskKind::Habit
+    );
+    assert_eq!(task.habit_id.as_deref(), Some(habit.id.as_str()));
+    assert!(
+        task.note_path.is_none(),
+        "task de hábito nunca recebe nota `.md`"
+    );
+    assert_eq!(
+        task.task_column,
+        copernico_app_lib::domain::models::TaskColumn::Todo
+    );
+    assert_eq!(
+        task.due_date.as_deref(),
+        Some(
+            chrono::Local::now()
+                .date_naive()
+                .format("%Y-%m-%d")
+                .to_string()
+                .as_str()
+        ),
+        "due_date = hoje"
+    );
+    // O quadro carrega os hábitos junto (cor dos cards sem N+1 de IPC).
+    assert_eq!(board.habits.len(), 1);
+    assert_eq!(board.habits[0].id, habit.id);
+    assert_eq!(board.habits[0].cor, habit.cor);
+}
+
+#[test]
+fn test_habit_not_matching_today_generates_nothing() {
+    use chrono::{Datelike, Local};
+    let (_db, srv, _dir) = kanban_vault_fixture();
+    // Cron cujo mês nunca é o atual ⇒ nunca casa com hoje.
+    let wrong_month = (Local::now().month() % 12) + 1;
+    srv.habit()
+        .create_habit("Anual", &format!("0 9 1 {} *", wrong_month), None)
+        .unwrap();
+    assert_eq!(srv.habit().sync_habit_tasks_today().unwrap(), 0);
+    assert!(srv.list_board(None).unwrap().tasks.is_empty());
+}
+
+#[test]
+fn test_habit_task_column_syncs_metric() {
+    let (db, srv, _dir) = kanban_vault_fixture();
+    let habit = srv
+        .habit()
+        .create_habit("Alongamento", "0 9 * * *", None)
+        .unwrap();
+    srv.habit().sync_habit_tasks_today().unwrap();
+
+    let board = srv.list_board(None).unwrap();
+    assert_eq!(board.tasks.len(), 1);
+    let task_id = board.tasks[0].id.clone();
+    let due = board.tasks[0].due_date.clone().unwrap();
+
+    let rows_for = |date: &str| -> usize {
+        db.query_tabular_metrics(Some("habito"), None, None, Some(&habit.id))
+            .unwrap()
+            .into_iter()
+            .filter(|r| r.record_date == date)
+            .count()
+    };
+
+    // Ainda em 'todo' ⇒ nenhuma métrica (task é a fonte única).
+    assert_eq!(rows_for(&due), 0);
+
+    // Conclui ⇒ linha do dia (value=1, notes=título).
+    srv.move_task(
+        &task_id,
+        copernico_app_lib::domain::models::TaskColumn::Done,
+        0,
+    )
+    .unwrap();
+    let rows = db
+        .query_tabular_metrics(Some("habito"), None, None, Some(&habit.id))
+        .unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].record_date, due);
+    assert_eq!(rows[0].metric_value, 1.0);
+    assert_eq!(rows[0].notes.as_deref(), Some("Alongamento"));
+    assert_eq!(rows_for(&due), 1);
+
+    // Re-done é idempotente: upsert substitui, nunca duplica.
+    srv.move_task(
+        &task_id,
+        copernico_app_lib::domain::models::TaskColumn::Done,
+        0,
+    )
+    .unwrap();
+    assert_eq!(rows_for(&due), 1);
+
+    // Saiu do 'done' ⇒ remove a linha do dia.
+    srv.move_task(
+        &task_id,
+        copernico_app_lib::domain::models::TaskColumn::Todo,
+        0,
+    )
+    .unwrap();
+    assert_eq!(rows_for(&due), 0);
+
+    // Voltou ao 'done' ⇒ regrava.
+    srv.move_task(
+        &task_id,
+        copernico_app_lib::domain::models::TaskColumn::Done,
+        0,
+    )
+    .unwrap();
+    assert_eq!(rows_for(&due), 1);
+}
+
+#[test]
+fn test_habit_deactivate_and_delete_rules() {
+    use copernico_app_lib::domain::traits::KanbanStore;
+    let (_db, srv, _dir) = kanban_vault_fixture();
+
+    let h = srv
+        .habit()
+        .create_habit("Meditar", "0 9 * * *", None)
+        .unwrap();
+    assert_eq!(srv.habit().sync_habit_tasks_today().unwrap(), 1);
+    let task_id = srv.list_board(None).unwrap().tasks[0].id.clone();
+
+    // Desativar para de gerar (task já gerada permanece).
+    srv.habit().set_active(&h.id, false).unwrap();
+    // Simula o dia seguinte: apaga a task direto no repo (o serviço bloqueia
+    // exclusão de task de hábito — o caminho legítimo é desativar o hábito).
+    srv.repo().delete_task(&task_id).unwrap();
+    assert_eq!(srv.habit().sync_habit_tasks_today().unwrap(), 0);
+    assert!(srv.list_board(None).unwrap().tasks.is_empty());
+
+    // Reativar volta a gerar.
+    srv.habit().set_active(&h.id, true).unwrap();
+    assert_eq!(srv.habit().sync_habit_tasks_today().unwrap(), 1);
+
+    // Já gerou task ⇒ `delete_habit` desativa (retorna false), não apaga.
+    assert!(!srv.habit().delete_habit(&h.id).unwrap());
+    let listed = srv.habit().list_habits().unwrap();
+    assert_eq!(listed.len(), 1);
+    assert!(!listed[0].ativo, "deleção vira ativo=0 quando há histórico");
+
+    // Nunca gerou task ⇒ hard delete de verdade.
+    let fresh = srv
+        .habit()
+        .create_habit("Novato", "0 9 * * *", None)
+        .unwrap();
+    assert!(srv.habit().delete_habit(&fresh.id).unwrap());
+    assert!(srv
+        .habit()
+        .list_habits()
+        .unwrap()
+        .iter()
+        .all(|x| x.id != fresh.id));
+}
+
+#[test]
+fn test_habit_delete_task_blocked_and_streak_fills_from_metrics() {
+    let (db, srv, _dir) = kanban_vault_fixture();
+    let habit = srv.habit().create_habit("Água", "0 9 * * *", None).unwrap();
+    srv.habit().sync_habit_tasks_today().unwrap();
+    let board = srv.list_board(None).unwrap();
+    let task_id = board.tasks[0].id.clone();
+
+    // Task de hábito não some solta no quadro — o caminho é o próprio hábito.
+    assert!(srv.delete_task(&task_id).is_err());
+
+    // Conclui ⇒ streak preenchido na listagem (métrica de hoje).
+    srv.move_task(
+        &task_id,
+        copernico_app_lib::domain::models::TaskColumn::Done,
+        0,
+    )
+    .unwrap();
+    let listed = srv.habit().list_habits().unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].streak_atual, 1);
+    assert_eq!(listed[0].id, habit.id);
+
+    // Streak derivado continua consistente com a métrica persistida.
+    let today = chrono::Local::now()
+        .date_naive()
+        .format("%Y-%m-%d")
+        .to_string();
+    assert_eq!(srv.habit().streak(&habit.id, &today).unwrap(), 1);
+    let _ = db;
+}
+
+#[test]
+fn test_streak_computation_breaks_on_gap() {
+    use copernico_app_lib::domain::models::habit as rules;
+    let v = |dates: &[&str]| -> Vec<String> { dates.iter().map(|s| s.to_string()).collect() };
+
+    // Sequência viva até hoje.
+    assert_eq!(
+        rules::compute_streak(
+            &v(&["2026-09-24", "2026-09-23", "2026-09-22"]),
+            "2026-09-24"
+        ),
+        3
+    );
+    // Viva sem registro de hoje (registrou ontem — pendente de hoje).
+    assert_eq!(
+        rules::compute_streak(&v(&["2026-09-23", "2026-09-22"]), "2026-09-24"),
+        2
+    );
+    // Pulou ontem ⇒ zerou.
+    assert_eq!(rules::compute_streak(&v(&["2026-09-22"]), "2026-09-24"), 0);
+    // Gap no meio quebra a sequência.
+    assert_eq!(
+        rules::compute_streak(
+            &v(&["2026-09-24", "2026-09-23", "2026-09-21"]),
+            "2026-09-24"
+        ),
+        2
+    );
+    // Sem registros.
+    assert_eq!(rules::compute_streak(&[], "2026-09-24"), 0);
+    // Data malformada não panica.
+    assert_eq!(rules::compute_streak(&v(&["xx"]), "2026-09-24"), 0);
+}
+
+#[test]
+fn test_criar_habito_tool_builds_cron() {
+    ensure_ort_initialized();
+    use copernico_app_lib::indexer::Indexer;
+    use copernico_app_lib::mcp::McpManager;
+    use copernico_app_lib::services::kanban_srv::KanbanService;
+    use copernico_app_lib::tool_registry::ToolRegistry;
+    use std::sync::Arc;
+
+    let dir = tempdir().unwrap();
+    let db = Arc::new(Database::init(Path::new(":memory:")).unwrap());
+    let vm = Arc::new(VaultManager::new(
+        dir.path().join("default"),
+        dir.path().join("obsidian"),
+    ));
+    let kanban = Arc::new(KanbanService::new(db.clone(), vm.clone()));
+    let idx = Arc::new(Indexer::new(db.get_pool(), vm.clone()).unwrap());
+    let mcp = Arc::new(McpManager::new());
+    let reg = ToolRegistry::new(db, vm, idx, kanban.clone(), mcp, dir.path().join("skills"));
+
+    // Dias naturais + hora ⇒ cron ("correr terças e quintas às 06:00").
+    let args = serde_json::json!({ "titulo": "Correr", "dias": [2, 4], "hora": "06:00" });
+    let v: serde_json::Value =
+        serde_json::from_str(&reg.execute("criar_habito", &args.to_string())).unwrap();
+    assert_eq!(v["sucesso"], true, "{}", v);
+    assert_eq!(v["cron"], "0 6 * * 2,4");
+
+    // Sem dias/hora ⇒ todo dia às 09:00.
+    let args2 = serde_json::json!({ "titulo": "Beber água" });
+    let v2: serde_json::Value =
+        serde_json::from_str(&reg.execute("criar_habito", &args2.to_string())).unwrap();
+    assert_eq!(v2["sucesso"], true, "{}", v2);
+    assert_eq!(v2["cron"], "0 9 * * *");
+
+    // Dia inválido ⇒ erro tipado, sem pânico.
+    let args3 = serde_json::json!({ "titulo": "Inválido", "dias": [9] });
+    let v3: serde_json::Value =
+        serde_json::from_str(&reg.execute("criar_habito", &args3.to_string())).unwrap();
+    assert_eq!(v3["sucesso"], false);
+    // Hora malformada ⇒ erro tipado.
+    let args4 = serde_json::json!({ "titulo": "Inválido", "hora": "9h" });
+    let v4: serde_json::Value =
+        serde_json::from_str(&reg.execute("criar_habito", &args4.to_string())).unwrap();
+    assert_eq!(v4["sucesso"], false);
+
+    // Os dois criados aparecem no quadro (cor dos cards pronta para o F4 UI).
+    let habits = kanban.list_board(None).unwrap().habits;
+    assert_eq!(habits.len(), 2);
+    assert!(habits.iter().any(|h| h.titulo == "Correr"));
+    assert!(habits.iter().any(|h| h.titulo == "Beber água"));
+}
+
+// ─── Kanban Semanal — Fase 5: Insights ──────────────────────
+
+#[test]
+fn test_expected_occurrences_counts_sundays_per_month() {
+    use copernico_app_lib::domain::models::habit as rules;
+
+    // Fev/2026 começa num domingo (4 domingos); Mar/2026 também (5 domingos).
+    let feb = (
+        rules::days_from_civil(2026, 2, 1),
+        rules::days_from_civil(2026, 2, 28),
+    );
+    let mar = (
+        rules::days_from_civil(2026, 3, 1),
+        rules::days_from_civil(2026, 3, 31),
+    );
+    assert_eq!(
+        rules::expected_occurrences("0 9 * * 0", feb.0, feb.1).unwrap(),
+        4
+    );
+    assert_eq!(
+        rules::expected_occurrences("0 9 * * 0", mar.0, mar.1).unwrap(),
+        5
+    );
+    // Todo dia ⇒ uma ocorrência por dia do intervalo.
+    assert_eq!(
+        rules::expected_occurrences("0 9 * * *", feb.0, feb.1).unwrap(),
+        28
+    );
+    // Intervalo invertido ⇒ 0 (sem pânico); cron inválido ⇒ erro tipado.
+    assert_eq!(
+        rules::expected_occurrences("0 9 * * *", feb.1, feb.0).unwrap(),
+        0
+    );
+    assert!(rules::expected_occurrences("cron-lixo", feb.0, feb.1).is_err());
+}
+
+#[test]
+fn test_insights_aggregates_by_week_with_dense_bars() {
+    use chrono::{Duration, Local};
+    use copernico_app_lib::domain::models::{KanbanTask, TaskColumn, TaskKind, TaskStatus};
+    use copernico_app_lib::domain::traits::KanbanStore;
+
+    let (_db, srv, _dir) = kanban_vault_fixture();
+    let today = Local::now().date_naive();
+    let today_str = today.format("%Y-%m-%d").to_string();
+    let bar_start = (today - Duration::days(13)).format("%Y-%m-%d").to_string();
+
+    // Hábito ativo diário ⇒ alimenta o "estimado" das linhas (7/semana).
+    let habit = srv
+        .habit()
+        .create_habit("Alongamento", "0 9 * * *", None)
+        .unwrap();
+
+    // Semana passada (ainda aberta) com 3 tasks: 2 concluídas (1 delas de hábito).
+    let past = srv.get_or_create_week(today - Duration::days(30)).unwrap();
+    let mk_task =
+        |id: &str, week: &str, column: TaskColumn, kind: TaskKind, due: Option<&str>| KanbanTask {
+            id: id.to_string(),
+            week_id: week.to_string(),
+            titulo: id.to_string(),
+            note_path: None,
+            task_column: column,
+            status: TaskStatus::Active,
+            carried_to: None,
+            position: 1024.0,
+            task_kind: kind,
+            habit_id: if kind == TaskKind::Habit {
+                Some(habit.id.clone())
+            } else {
+                None
+            },
+            due_date: due.map(str::to_string),
+            created_at: String::new(),
+            updated_at: String::new(),
+        };
+    srv.repo()
+        .insert_task(&mk_task(
+            "t1",
+            &past.id,
+            TaskColumn::Done,
+            TaskKind::Normal,
+            None,
+        ))
+        .unwrap();
+    srv.repo()
+        .insert_task(&mk_task(
+            "t2",
+            &past.id,
+            TaskColumn::Todo,
+            TaskKind::Normal,
+            None,
+        ))
+        .unwrap();
+    srv.repo()
+        .insert_task(&mk_task(
+            "t3",
+            &past.id,
+            TaskColumn::Done,
+            TaskKind::Habit,
+            None,
+        ))
+        .unwrap();
+
+    // Semana aberta atual com 2 tasks de hoje (1 concluída).
+    let current = srv.get_or_create_week(today).unwrap();
+    srv.repo()
+        .insert_task(&mk_task(
+            "t4",
+            &current.id,
+            TaskColumn::Done,
+            TaskKind::Normal,
+            Some(&today_str),
+        ))
+        .unwrap();
+    srv.repo()
+        .insert_task(&mk_task(
+            "t5",
+            &current.id,
+            TaskColumn::Todo,
+            TaskKind::Normal,
+            Some(&today_str),
+        ))
+        .unwrap();
+
+    // Fechamento explícito da semana vencida (idempotente).
+    srv.close_week(&past.id).unwrap();
+
+    let ins = srv.insights(None).unwrap();
+    assert_eq!(ins.periodo, "semana");
+    // Semana aberta: 1 de 2 ⇒ 50%.
+    assert_eq!(ins.pct_semana, 50.0);
+
+    // Tendência em ordem cronológica, incluindo a semana fechada.
+    assert_eq!(ins.trend.len(), 2);
+    assert_eq!(ins.trend[0].week_id, past.id);
+    assert_eq!(ins.trend[0].pct_conclusao, 66.7); // 2 de 3
+    assert_eq!(ins.trend[0].taxa_habitos, 100.0); // 1 de 1
+    assert_eq!(ins.trend[1].week_id, current.id);
+    assert_eq!(ins.trend[1].pct_conclusao, 50.0);
+
+    // Linhas "estimado vs realizado" por semana, ASC, com cron diário ⇒ 7.
+    assert_eq!(ins.lines.len(), 2);
+    assert_eq!(ins.lines[0].periodo, past.id);
+    assert_eq!(ins.lines[0].estimado_tarefas, 3);
+    assert_eq!(ins.lines[0].realizado_tarefas, 2);
+    assert_eq!(ins.lines[0].estimado_habitos, 7);
+    assert_eq!(ins.lines[0].realizado_habitos, 1);
+    assert_eq!(ins.lines[1].periodo, current.id);
+    assert_eq!(ins.lines[1].estimado_tarefas, 2);
+    assert_eq!(ins.lines[1].realizado_tarefas, 1);
+    assert_eq!(ins.lines[1].estimado_habitos, 7);
+    assert_eq!(ins.lines[1].realizado_habitos, 0);
+
+    // Barras densas: 14 dias seguidos; só hoje tem task (due_date de hoje).
+    assert_eq!(ins.bars.len(), 14);
+    assert_eq!(ins.bars[0].date, bar_start);
+    assert_eq!(ins.bars[13].date, today_str);
+    let hoje = &ins.bars[13];
+    assert_eq!(hoje.tarefas_total, 2);
+    assert_eq!(hoje.tarefas_feitas, 1);
+    assert_eq!(hoje.pct_tarefas, 50.0);
+    assert_eq!(hoje.habitos_registrados, 0);
+    // Dias sem dado aparecem zerados (série densa para o SVG).
+    assert_eq!(ins.bars[0].tarefas_total, 0);
+    assert_eq!(ins.bars[0].pct_tarefas, 0.0);
+
+    // Hábito sem métrica ainda: placar de hoje contabiliza, streak zero.
+    assert_eq!(ins.habitos_hoje_total, 1);
+    assert_eq!(ins.habitos_hoje_feitos, 0);
+    assert_eq!(ins.streaks.len(), 1);
+    assert_eq!(ins.streaks[0].streak_atual, 0);
+
+    // Granularidade mensal: chaves `AAAA-MM`, agregado pronto no backend.
+    let mes = srv.insights(Some("mes")).unwrap();
+    assert_eq!(mes.periodo, "mes");
+    assert!(!mes.lines.is_empty());
+    assert!(mes.lines.iter().all(|p| p.periodo.len() == 7));
+    assert!(mes
+        .lines
+        .iter()
+        .all(|p| p.estimado_tarefas >= p.realizado_tarefas));
+
+    // Período inválido ⇒ erro tipado (sem pânico).
+    assert!(srv.insights(Some("ano")).is_err());
+}
+
+#[test]
+fn test_insights_streaks_and_today_score_from_metrics() {
+    let (db, srv, _dir) = kanban_vault_fixture();
+    let habit = srv
+        .habit()
+        .create_habit("Beber água", "0 9 * * *", None)
+        .unwrap();
+
+    let today = chrono::Local::now().date_naive();
+    let today_str = today.format("%Y-%m-%d").to_string();
+    let yesterday_str = (today - chrono::Duration::days(1))
+        .format("%Y-%m-%d")
+        .to_string();
+    db.insert_tabular_metric("habito", &today_str, &habit.id, 1.0, None, None)
+        .unwrap();
+    db.insert_tabular_metric("habito", &yesterday_str, &habit.id, 1.0, None, None)
+        .unwrap();
+
+    // Semana aberta para as linhas terem ponto (cron diário ⇒ 7 estimados).
+    srv.get_or_create_week(today).unwrap();
+    let ins = srv.insights(None).unwrap();
+
+    assert_eq!(ins.streaks.len(), 1);
+    let card = &ins.streaks[0];
+    assert_eq!(card.habit.id, habit.id);
+    assert_eq!(card.streak_atual, 2);
+    assert_eq!(card.maior_streak, 2);
+    assert!(card.feito_hoje);
+    assert_eq!(ins.habitos_hoje_total, 1);
+    assert_eq!(ins.habitos_hoje_feitos, 1);
+
+    assert_eq!(ins.lines.len(), 1);
+    assert_eq!(ins.lines[0].estimado_habitos, 7);
+    assert_eq!(
+        ins.lines[0].realizado_habitos, 0,
+        "sem task de hábito concluída"
+    );
+
+    // Barra de hoje reflete a métrica registrada.
+    assert_eq!(ins.bars[13].habitos_registrados, 1);
+}
+
+#[test]
+fn test_listar_insights_tool_returns_aggregates() {
+    ensure_ort_initialized();
+    use copernico_app_lib::indexer::Indexer;
+    use copernico_app_lib::mcp::McpManager;
+    use copernico_app_lib::services::kanban_srv::KanbanService;
+    use copernico_app_lib::tool_registry::ToolRegistry;
+    use std::sync::Arc;
+
+    let dir = tempdir().unwrap();
+    let db = Arc::new(Database::init(Path::new(":memory:")).unwrap());
+    let vm = Arc::new(VaultManager::new(
+        dir.path().join("default"),
+        dir.path().join("obsidian"),
+    ));
+    let kanban = Arc::new(KanbanService::new(db.clone(), vm.clone()));
+    let idx = Arc::new(Indexer::new(db.get_pool(), vm.clone()).unwrap());
+    let mcp = Arc::new(McpManager::new());
+    let reg = ToolRegistry::new(db, vm, idx, kanban, mcp, dir.path().join("skills"));
+
+    // Padrão ⇒ período "semana" com o relatório embutido (Markdown + JSON).
+    let v: serde_json::Value = serde_json::from_str(&reg.execute("listar_insights", "{}")).unwrap();
+    assert_eq!(v["sucesso"], true, "{}", v);
+    assert_eq!(v["insights"]["periodo"], "semana");
+    assert!(v["insights"]["bars"].as_array().is_some());
+    assert!(v["resumo"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("## Insights"));
+
+    // Alias mensal é aceito.
+    let v2: serde_json::Value = serde_json::from_str(&reg.execute(
+        "listar_insights",
+        &serde_json::json!({ "periodo": "mensal" }).to_string(),
+    ))
+    .unwrap();
+    assert_eq!(v2["sucesso"], true, "{}", v2);
+    assert_eq!(v2["insights"]["periodo"], "mes");
+
+    // Período inválido ⇒ erro tipado, sem pânico.
+    let v3: serde_json::Value = serde_json::from_str(&reg.execute(
+        "listar_insights",
+        &serde_json::json!({ "periodo": "ano" }).to_string(),
+    ))
+    .unwrap();
+    assert_eq!(v3["sucesso"], false, "{}", v3);
 }

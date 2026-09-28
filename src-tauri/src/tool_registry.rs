@@ -1,18 +1,50 @@
+use crate::bridge::emitter::emit_kanban_changed;
 use crate::db::Database;
+use crate::domain::models::{EntitySubtipo, TaskColumn, WeekStatus};
 use crate::indexer::Indexer;
 use crate::mcp::McpManager;
+use crate::services::kanban_srv::KanbanService;
 use crate::vault::VaultManager;
 use async_trait::async_trait;
 use rusqlite::params;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
+use tauri::AppHandle;
 
 pub struct ToolContext {
     pub db: Arc<Database>,
     pub vault: Arc<VaultManager>,
     pub indexer: Arc<Indexer>,
     pub skills_dir: std::path::PathBuf,
+    /// Board kanban — tools da Fase 3 administram semanas/tarefas/entities
+    /// através do serviço (nenhuma regra de negócio vive aqui).
+    pub kanban: Arc<KanbanService>,
+    /// `AppHandle` opcional para emitir `kanban-changed` após mutações do
+    /// agente (None em testes/web — o emit é best-effort e nunca bloqueia).
+    pub app: RwLock<Option<AppHandle>>,
+}
+
+/// Emite `kanban-changed` best-effort após uma mutação feita por tool.
+fn emit_kanban(ctx: &ToolContext, week_id: &str, motivo: &str) {
+    if let Ok(guard) = ctx.app.read() {
+        if let Some(app) = guard.as_ref() {
+            let _ = emit_kanban_changed(app, week_id, motivo);
+        }
+    }
+}
+
+/// Coluna do board a partir do valor da tool (`todo|doing|done`).
+fn parse_task_column(raw: Option<&str>) -> Result<TaskColumn, String> {
+    match raw.map(str::trim).unwrap_or("") {
+        "" | "todo" => Ok(TaskColumn::Todo),
+        "doing" => Ok(TaskColumn::Doing),
+        "done" => Ok(TaskColumn::Done),
+        other => Err(format!(
+            "coluna inválida: '{}' (use 'todo', 'doing' ou 'done')",
+            other
+        )),
+    }
 }
 
 pub use crate::domain::traits::BuiltinTool;
@@ -1354,6 +1386,642 @@ impl BuiltinTool for ProporEvolucaoNotaTool {
 
 // ─── ToolRegistry Unificado ─────────────────────────────────
 
+// ─── 16. Kanban Semanal Tools (Fase 3) ──────────────────────
+//
+// Escopo anti-alucinação: `listar_kanban` sem `semana` devolve apenas a
+// semana aberta; histórico exige pedido explícito. Toda escrita valida a
+// semana aberta no serviço (erro tipado `"semana fechada: <id>"`).
+
+pub struct ListarKanbanTool;
+
+#[async_trait]
+impl BuiltinTool for ListarKanbanTool {
+    fn name(&self) -> &str {
+        "listar_kanban"
+    }
+
+    fn description(&self) -> &str {
+        "Lista tarefas do quadro kanban semanal. Sem 'semana' retorna apenas a semana ABERTA atual (escopo anti-alucinação); histórico exige 'semana' explícita (ex: \"2026-W38\")."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "semana": {
+                    "type": "string",
+                    "description": "Semana ISO explícita para ler histórico (formato 2026-W38). Omitido = semana aberta atual."
+                }
+            },
+            "required": []
+        })
+    }
+
+    fn execute(&self, args: &Value, ctx: &ToolContext) -> String {
+        let semana = args["semana"]
+            .as_str()
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        let explicito = semana.is_some();
+        match ctx.kanban.list_board(semana) {
+            Ok(board) => {
+                let mut c_todo = 0usize;
+                let mut c_doing = 0usize;
+                let mut c_done = 0usize;
+                let mut tarefas = Vec::new();
+                for t in &board.tasks {
+                    match t.task_column {
+                        TaskColumn::Todo => c_todo += 1,
+                        TaskColumn::Doing => c_doing += 1,
+                        TaskColumn::Done => c_done += 1,
+                    }
+                    tarefas.push(json!({
+                        "id": t.id,
+                        "titulo": t.titulo,
+                        "coluna": t.task_column.as_db(),
+                        "prazo": t.due_date,
+                        "nota": t.note_path,
+                        "tipo": t.task_kind.as_db()
+                    }));
+                }
+                let estado = if board.week.status == WeekStatus::Closed {
+                    "fechada"
+                } else {
+                    "aberta"
+                };
+                let escopo = if explicito { "explicito" } else { "aberta" };
+                let resumo = format!(
+                    "Semana {} ({}): {} tarefa(s) — {} a fazer, {} em andamento, {} concluída(s). Escopo: {}.",
+                    board.week.id,
+                    estado,
+                    board.tasks.len(),
+                    c_todo,
+                    c_doing,
+                    c_done,
+                    if explicito {
+                        "histórico explícito"
+                    } else {
+                        "semana aberta (padrão)"
+                    }
+                );
+                json!({
+                    "sucesso": true,
+                    "escopo": escopo,
+                    "semana": { "id": board.week.id, "status": estado },
+                    "tarefas": tarefas,
+                    "resumo": resumo
+                })
+                .to_string()
+            }
+            Err(e) => json!({
+                "sucesso": false,
+                "erro": e.to_string(),
+                "resumo": format!("Falha ao listar o quadro: {}", e)
+            })
+            .to_string(),
+        }
+    }
+}
+
+pub struct CriarTarefaTool;
+
+#[async_trait]
+impl BuiltinTool for CriarTarefaTool {
+    fn name(&self) -> &str {
+        "criar_tarefa"
+    }
+
+    fn description(&self) -> &str {
+        "Cria uma tarefa na semana aberta do quadro kanban. Toda escrita exige semana aberta (semana fechada é rejeitada)."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "titulo": { "type": "string", "description": "Título da tarefa em pt-BR" },
+                "coluna": {
+                    "type": "string",
+                    "description": "Coluna inicial: 'todo' (padrão), 'doing' ou 'done'"
+                },
+                "prazo": {
+                    "type": "string",
+                    "description": "Prazo opcional em AAAA-MM-DD"
+                }
+            },
+            "required": ["titulo"]
+        })
+    }
+
+    fn execute(&self, args: &Value, ctx: &ToolContext) -> String {
+        let titulo = args["titulo"].as_str().unwrap_or("").trim();
+        if titulo.is_empty() {
+            return json!({
+                "sucesso": false,
+                "erro": "Campo 'titulo' é obrigatório",
+                "resumo": "Falha ao criar tarefa: título ausente."
+            })
+            .to_string();
+        }
+        let column = match parse_task_column(args["coluna"].as_str()) {
+            Ok(c) => c,
+            Err(msg) => return json!({ "sucesso": false, "erro": msg, "resumo": msg }).to_string(),
+        };
+        let prazo = args["prazo"]
+            .as_str()
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        match ctx.kanban.create_task(titulo, column, prazo) {
+            Ok(task) => {
+                emit_kanban(ctx, &task.week_id, "task_created");
+                json!({
+                    "sucesso": true,
+                    "tarefa_id": task.id,
+                    "semana": task.week_id,
+                    "coluna": task.task_column.as_db(),
+                    "resumo": format!(
+                        "Tarefa '{}' criada na semana {} (coluna {}).",
+                        task.titulo,
+                        task.week_id,
+                        task.task_column.as_db()
+                    )
+                })
+                .to_string()
+            }
+            Err(e) => json!({
+                "sucesso": false,
+                "erro": e.to_string(),
+                "resumo": format!("Falha ao criar tarefa: {}", e)
+            })
+            .to_string(),
+        }
+    }
+}
+
+/// Converte dias naturais + hora (`HH:MM`) em cron de 5 campos.
+/// `dias` vazio = todos os dias. 0=Dom … 6=Sáb (convenção do cron).
+fn habit_days_to_cron(dias: &[u64], hora: Option<&str>) -> Result<String, String> {
+    let (h, m) = match hora.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(raw) => {
+            let (hh, mm) = raw
+                .split_once(':')
+                .ok_or_else(|| "hora inválida (use HH:MM)".to_string())?;
+            let h: u32 = hh
+                .trim()
+                .parse()
+                .map_err(|_| "hora inválida (use HH:MM)".to_string())?;
+            let m: u32 = mm
+                .trim()
+                .parse()
+                .map_err(|_| "minuto inválido (use HH:MM)".to_string())?;
+            if h > 23 || m > 59 {
+                return Err("hora fora do intervalo (00:00–23:59)".to_string());
+            }
+            (h, m)
+        }
+        None => (9, 0),
+    };
+    let dow = if dias.is_empty() {
+        "*".to_string()
+    } else {
+        let mut norm: Vec<u32> = Vec::new();
+        for d in dias {
+            if *d > 6 {
+                return Err(format!("dia inválido: {} (0=Dom … 6=Sáb)", d));
+            }
+            let v = *d as u32;
+            if !norm.contains(&v) {
+                norm.push(v);
+            }
+        }
+        norm.sort_unstable();
+        norm.iter()
+            .map(u32::to_string)
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    Ok(format!("{} {} * * {}", m, h, dow))
+}
+
+pub struct CriarHabitoTool;
+
+#[async_trait]
+impl BuiltinTool for CriarHabitoTool {
+    fn name(&self) -> &str {
+        "criar_habito"
+    }
+
+    fn description(&self) -> &str {
+        "Cria um hábito recorrente (ex: beber água todo dia às 09:00). O quadro gera sozinho uma tarefa colorida no dia certo e concluí-la vira métrica de streak. Não escreve no cofre."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "titulo": { "type": "string", "description": "Nome do hábito em pt-BR (ex: 'Beber água')" },
+                "dias": {
+                    "type": "array",
+                    "items": { "type": "integer", "minimum": 0, "maximum": 6 },
+                    "description": "Dias da semana: 0=Dom, 1=Seg … 6=Sáb. Omitido/vazio = todos os dias."
+                },
+                "hora": { "type": "string", "description": "Horário de referência 'HH:MM' (padrão 09:00)" },
+                "cor": { "type": "string", "description": "Cor do card em #rrggbb (padrão verde)" }
+            },
+            "required": ["titulo"]
+        })
+    }
+
+    fn execute(&self, args: &Value, ctx: &ToolContext) -> String {
+        let titulo = args["titulo"].as_str().unwrap_or("").trim();
+        if titulo.is_empty() {
+            return json!({
+                "sucesso": false,
+                "erro": "Campo 'titulo' é obrigatório",
+                "resumo": "Falha ao criar hábito: título ausente."
+            })
+            .to_string();
+        }
+        let dias: Vec<u64> = args["dias"]
+            .as_array()
+            .map(|arr| arr.iter().filter_map(|v| v.as_u64()).collect())
+            .unwrap_or_default();
+        let cron = match habit_days_to_cron(&dias, args["hora"].as_str()) {
+            Ok(c) => c,
+            Err(msg) => return json!({ "sucesso": false, "erro": msg, "resumo": msg }).to_string(),
+        };
+        let cor = args["cor"]
+            .as_str()
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        match ctx.kanban.habit().create_habit(titulo, &cron, cor) {
+            Ok(habit) => {
+                if let Ok(week_id) = ctx.kanban.current_week_id() {
+                    emit_kanban(ctx, &week_id, "habit_created");
+                }
+                json!({
+                    "sucesso": true,
+                    "habito_id": habit.id,
+                    "cron": habit.cron_expr,
+                    "resumo": format!(
+                        "Hábito '{}' criado (cron '{}'). O quadro gera a tarefa no dia certo.",
+                        habit.titulo, habit.cron_expr
+                    )
+                })
+                .to_string()
+            }
+            Err(e) => json!({
+                "sucesso": false,
+                "erro": e.to_string(),
+                "resumo": format!("Falha ao criar hábito: {}", e)
+            })
+            .to_string(),
+        }
+    }
+}
+
+pub struct ListarInsightsTool;
+
+#[async_trait]
+impl BuiltinTool for ListarInsightsTool {
+    fn name(&self) -> &str {
+        "listar_insights"
+    }
+
+    fn description(&self) -> &str {
+        "Dashboard de produtividade: streaks de hábitos, conclusão da semana, barras diárias e tendência. Somente leitura, não escreve no cofre."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "periodo": {
+                    "type": "string",
+                    "enum": ["semana", "mes"],
+                    "description": "Granularidade de 'estimado vs realizado' (padrão 'semana')"
+                }
+            }
+        })
+    }
+
+    fn execute(&self, args: &Value, ctx: &ToolContext) -> String {
+        let periodo = args["periodo"].as_str();
+        let periodo = match crate::domain::models::insights::normalize_periodo(periodo) {
+            Ok(p) => p,
+            Err(e) => {
+                return json!({ "sucesso": false, "erro": e.to_string(), "resumo": e.to_string() })
+                    .to_string();
+            }
+        };
+        let insights = match ctx.kanban.insights(Some(periodo)) {
+            Ok(i) => i,
+            Err(e) => {
+                return json!({
+                    "sucesso": false,
+                    "erro": e.to_string(),
+                    "resumo": format!("Falha ao montar insights: {}", e)
+                })
+                .to_string();
+            }
+        };
+        // Tabela Markdown simples (o agente lê texto; o frontend plota SVG por IPC).
+        let mut md = format!(
+            "## Insights ({})\n\n- Semana atual: {}% de conclusão\n- Hábitos hoje: {}/{}\n",
+            insights.periodo,
+            insights.pct_semana,
+            insights.habitos_hoje_feitos,
+            insights.habitos_hoje_total
+        );
+        if !insights.streaks.is_empty() {
+            md.push_str("\n| Hábito | Streak | Maior | Hoje |\n|---|---|---|---|\n");
+            for s in &insights.streaks {
+                md.push_str(&format!(
+                    "| {} | {} | {} | {} |\n",
+                    s.habit.titulo,
+                    s.streak_atual,
+                    s.maior_streak,
+                    if s.feito_hoje { "✓" } else { "—" }
+                ));
+            }
+        }
+        if let Some(last) = insights.trend.last() {
+            md.push_str(&format!(
+                "\nTendência (última semana {}): {}% tarefas, {}% hábitos.",
+                last.week_id, last.pct_conclusao, last.taxa_habitos
+            ));
+        }
+        json!({
+            "sucesso": true,
+            "resumo": md,
+            "insights": insights
+        })
+        .to_string()
+    }
+}
+
+pub struct MoverTarefaTool;
+
+#[async_trait]
+impl BuiltinTool for MoverTarefaTool {
+    fn name(&self) -> &str {
+        "mover_tarefa"
+    }
+
+    fn description(&self) -> &str {
+        "Move uma tarefa entre colunas do quadro ('todo', 'doing', 'done'). Exige semana aberta."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "id_tarefa": { "type": "string", "description": "Id da tarefa (vem de listar_kanban)" },
+                "coluna": { "type": "string", "description": "Coluna de destino: 'todo', 'doing' ou 'done'" },
+                "indice": {
+                    "type": "integer",
+                    "description": "Posição visual na coluna de destino (padrão: fim da coluna)"
+                }
+            },
+            "required": ["id_tarefa", "coluna"]
+        })
+    }
+
+    fn execute(&self, args: &Value, ctx: &ToolContext) -> String {
+        let id = args["id_tarefa"].as_str().unwrap_or("").trim();
+        if id.is_empty() {
+            return json!({
+                "sucesso": false,
+                "erro": "Campo 'id_tarefa' é obrigatório",
+                "resumo": "Falha ao mover tarefa: id ausente."
+            })
+            .to_string();
+        }
+        let column = match parse_task_column(args["coluna"].as_str()) {
+            Ok(c) => c,
+            Err(msg) => return json!({ "sucesso": false, "erro": msg, "resumo": msg }).to_string(),
+        };
+        // Sem `indice` ⇒ fim da coluna (target_position faz clamp).
+        let index = args["indice"]
+            .as_u64()
+            .map(|v| v as usize)
+            .unwrap_or(usize::MAX);
+        match ctx.kanban.move_task(id, column, index) {
+            Ok(task) => {
+                emit_kanban(ctx, &task.week_id, "task_moved");
+                json!({
+                    "sucesso": true,
+                    "tarefa_id": task.id,
+                    "semana": task.week_id,
+                    "coluna": task.task_column.as_db(),
+                    "resumo": format!(
+                        "Tarefa '{}' movida para '{}' na semana {}.",
+                        task.titulo,
+                        task.task_column.as_db(),
+                        task.week_id
+                    )
+                })
+                .to_string()
+            }
+            Err(e) => json!({
+                "sucesso": false,
+                "erro": e.to_string(),
+                "resumo": format!("Falha ao mover tarefa: {}", e)
+            })
+            .to_string(),
+        }
+    }
+}
+
+pub struct CriarEntidadeTool;
+
+#[async_trait]
+impl BuiltinTool for CriarEntidadeTool {
+    fn name(&self) -> &str {
+        "criar_entidade"
+    }
+
+    fn description(&self) -> &str {
+        "Cria uma entity (pessoa, projeto, lugar ou livre): nota canônica 'tipo: entidade' no vault padrão + índice derivado. Global — não depende de semana."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "titulo": { "type": "string", "description": "Nome da entity (ex: 'Ana Silva', 'Projeto Copernico')" },
+                "subtipo": {
+                    "type": "string",
+                    "description": "Subtipo: 'pessoa', 'projeto', 'lugar' ou 'livre' (padrão)"
+                }
+            },
+            "required": ["titulo"]
+        })
+    }
+
+    fn execute(&self, args: &Value, ctx: &ToolContext) -> String {
+        let titulo = args["titulo"].as_str().unwrap_or("").trim();
+        if titulo.is_empty() {
+            return json!({
+                "sucesso": false,
+                "erro": "Campo 'titulo' é obrigatório",
+                "resumo": "Falha ao criar entity: título ausente."
+            })
+            .to_string();
+        }
+        let subtipo = match args["subtipo"].as_str().unwrap_or("").trim() {
+            "" | "livre" => EntitySubtipo::Livre,
+            "pessoa" => EntitySubtipo::Pessoa,
+            "projeto" => EntitySubtipo::Projeto,
+            "lugar" => EntitySubtipo::Lugar,
+            other => {
+                let msg = format!(
+                    "subtipo inválido: '{}' (use 'pessoa', 'projeto', 'lugar' ou 'livre')",
+                    other
+                );
+                return json!({ "sucesso": false, "erro": msg, "resumo": msg }).to_string();
+            }
+        };
+        match ctx.kanban.create_entity(titulo, subtipo) {
+            Ok(entry) => json!({
+                "sucesso": true,
+                "entity_id": entry.id,
+                "nota": entry.note_path,
+                "resumo": format!(
+                    "Entity '{}' ({}) criada em '{}'.",
+                    entry.titulo,
+                    subtipo.as_db(),
+                    entry.note_path
+                )
+            })
+            .to_string(),
+            Err(e) => json!({
+                "sucesso": false,
+                "erro": e.to_string(),
+                "resumo": format!("Falha ao criar entity: {}", e)
+            })
+            .to_string(),
+        }
+    }
+}
+
+pub struct VincularNotaTool;
+
+#[async_trait]
+impl BuiltinTool for VincularNotaTool {
+    fn name(&self) -> &str {
+        "vincular_nota"
+    }
+
+    fn description(&self) -> &str {
+        "Vincula uma nota existente do vault padrão a uma tarefa (só vínculo — a nota nunca é modificada). Exige semana aberta."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "id_tarefa": { "type": "string", "description": "Id da tarefa (vem de listar_kanban)" },
+                "nota": {
+                    "type": "string",
+                    "description": "Caminho relativo ou nome da nota no vault padrão (ex: 'Ideias_de_viagem.md')"
+                }
+            },
+            "required": ["id_tarefa", "nota"]
+        })
+    }
+
+    fn execute(&self, args: &Value, ctx: &ToolContext) -> String {
+        let id = args["id_tarefa"].as_str().unwrap_or("").trim();
+        let nota = args["nota"].as_str().unwrap_or("").trim();
+        if id.is_empty() || nota.is_empty() {
+            return json!({
+                "sucesso": false,
+                "erro": "Campos 'id_tarefa' e 'nota' são obrigatórios",
+                "resumo": "Falha ao vincular nota: parâmetros ausentes."
+            })
+            .to_string();
+        }
+        match ctx.kanban.link_task_note(id, nota) {
+            Ok(links) => {
+                if let Ok(task) = ctx.kanban.get_task(id) {
+                    emit_kanban(ctx, &task.week_id, "task_linked");
+                }
+                json!({
+                    "sucesso": true,
+                    "notas": links.notes,
+                    "resumo": format!("Nota '{}' vinculada à tarefa.", nota)
+                })
+                .to_string()
+            }
+            Err(e) => json!({
+                "sucesso": false,
+                "erro": e.to_string(),
+                "resumo": format!("Falha ao vincular nota: {}", e)
+            })
+            .to_string(),
+        }
+    }
+}
+
+pub struct VincularEntidadeTool;
+
+#[async_trait]
+impl BuiltinTool for VincularEntidadeTool {
+    fn name(&self) -> &str {
+        "vincular_entidade"
+    }
+
+    fn description(&self) -> &str {
+        "Vincula uma entity existente (id de criar_entidade ou list_entities) a uma tarefa. Ids desconhecidos são rejeitados (anti-alucinação). Exige semana aberta."
+    }
+
+    fn parameters_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "id_tarefa": { "type": "string", "description": "Id da tarefa (vem de listar_kanban)" },
+                "entity_id": { "type": "string", "description": "Id da entity (nota canônica já indexada)" }
+            },
+            "required": ["id_tarefa", "entity_id"]
+        })
+    }
+
+    fn execute(&self, args: &Value, ctx: &ToolContext) -> String {
+        let id = args["id_tarefa"].as_str().unwrap_or("").trim();
+        let entity_id = args["entity_id"].as_str().unwrap_or("").trim();
+        if id.is_empty() || entity_id.is_empty() {
+            return json!({
+                "sucesso": false,
+                "erro": "Campos 'id_tarefa' e 'entity_id' são obrigatórios",
+                "resumo": "Falha ao vincular entity: parâmetros ausentes."
+            })
+            .to_string();
+        }
+        match ctx.kanban.link_task_entity(id, entity_id) {
+            Ok(links) => {
+                if let Ok(task) = ctx.kanban.get_task(id) {
+                    emit_kanban(ctx, &task.week_id, "entity_linked");
+                }
+                json!({
+                    "sucesso": true,
+                    "entities": links.entities.iter().map(|e| &e.id).collect::<Vec<_>>(),
+                    "resumo": format!("Entity '{}' vinculada à tarefa.", entity_id)
+                })
+                .to_string()
+            }
+            Err(e) => json!({
+                "sucesso": false,
+                "erro": e.to_string(),
+                "resumo": format!("Falha ao vincular entity: {}", e)
+            })
+            .to_string(),
+        }
+    }
+}
+
+// ─── ToolRegistry Unificado ─────────────────────────────────
+
 pub struct ToolRegistry {
     builtin_tools: HashMap<String, Arc<dyn BuiltinTool>>,
     mcp_manager: Arc<McpManager>,
@@ -1365,6 +2033,7 @@ impl ToolRegistry {
         db: Arc<Database>,
         vault: Arc<VaultManager>,
         indexer: Arc<Indexer>,
+        kanban: Arc<KanbanService>,
         mcp_manager: Arc<McpManager>,
         skills_dir: std::path::PathBuf,
     ) -> Self {
@@ -1386,6 +2055,17 @@ impl ToolRegistry {
             Arc::new(RegistrarMetricaTool),
             Arc::new(ConsultarMetricasTool),
             Arc::new(ProporEvolucaoNotaTool),
+            // Fase 3 — Kanban semanal
+            Arc::new(ListarKanbanTool),
+            Arc::new(CriarTarefaTool),
+            Arc::new(MoverTarefaTool),
+            Arc::new(CriarEntidadeTool),
+            Arc::new(VincularNotaTool),
+            Arc::new(VincularEntidadeTool),
+            // Fase 4 — Hábitos
+            Arc::new(CriarHabitoTool),
+            // Fase 5 — Insights
+            Arc::new(ListarInsightsTool),
         ];
 
         for t in tools {
@@ -1397,12 +2077,22 @@ impl ToolRegistry {
             vault,
             indexer,
             skills_dir,
+            kanban,
+            app: RwLock::new(None),
         };
 
         Self {
             builtin_tools,
             mcp_manager,
             ctx,
+        }
+    }
+
+    /// Anexa o `AppHandle` (setup do Tauri) para que as tools emitan
+    /// `kanban-changed` após mutações do board. Testes/web ficam com `None`.
+    pub fn set_app_handle(&self, handle: AppHandle) {
+        if let Ok(mut guard) = self.ctx.app.write() {
+            *guard = Some(handle);
         }
     }
 

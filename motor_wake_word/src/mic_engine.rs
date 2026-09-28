@@ -125,7 +125,7 @@ pub fn start_mic_capture(
         .default_input_config()
         .map_err(|e| WakeWordError::Microphone(format!("Failed to query default mic config: {}", e)))?;
 
-    let hw_sample_rate = default_config.sample_rate();
+    let hw_sample_rate = default_config.sample_rate().0;
     let channels = default_config.channels() as usize;
     let sample_format = default_config.sample_format();
 
@@ -152,7 +152,7 @@ pub fn start_mic_capture(
             let running = Arc::clone(&is_running_clone);
 
             device.build_input_stream(
-                config,
+                &config,
                 move |data: &[f32], _: &cpal::InputCallbackInfo| {
                     if !running.load(Ordering::Relaxed) {
                         return;
@@ -177,7 +177,7 @@ pub fn start_mic_capture(
             let running = Arc::clone(&is_running_clone);
 
             device.build_input_stream(
-                config,
+                &config,
                 move |data: &[i16], _: &cpal::InputCallbackInfo| {
                     if !running.load(Ordering::Relaxed) {
                         return;

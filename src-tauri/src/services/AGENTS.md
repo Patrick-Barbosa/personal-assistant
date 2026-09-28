@@ -7,7 +7,7 @@ Esta camada orquestra os fluxos de trabalho, casos de uso e inteligência do sis
 - `agent_engine.rs`: Loop ReAct, dispatch e filtragem de ferramentas (Builtin Tools), geração de respostas e streaming.
 - `vault_srv.rs`: **Único dono** da lógica de notas Markdown (CRUD, wikilinks `[[...]]`, grafo de conhecimento, sanitização e compilação de arquivos `.base`).
 - `memory_srv.rs`: Busca semântica, reindexação vetorial e pontuação híbrida (BM25 + vetorial).
-- `voice_orch.rs`: Orquestração de voz em tempo real, detecção de silêncio, ciclo de escuta contínua e transições de estado do indicador visual.
+- `voice_orch.rs`: Orquestração de voz em tempo real em background (headless audio pipeline: wake-word sidecar, Groq Whisper STT, Edge-TTS, chimes), emitindo eventos de status via IPC (`wake-status-changed`) sem qualquer controle ou dependência de janelas transparentes ou overlays nativos Win32.
 - `consolidation_srv.rs`: **Único executor de escrita** pós-sessão de voz; cria itens e propostas no Inbox sem poluir o cofre diretamente.
 - `greeting_srv.rs`: Geração, agendamento, cache e expiração TTL de saudações matinais/noturnas.
 - `skill_srv.rs` & `skill_runner_srv.rs`: Ciclo de vida de skills locais, agendamento de rotinas e execução de runners.
@@ -27,4 +27,5 @@ Esta camada orquestra os fluxos de trabalho, casos de uso e inteligência do sis
 ## 3. Anti-padrões
 - **NUNCA** execute queries SQL diretas dentro dos serviços; sempre chame os repositórios em `infra/sqlite/`.
 - **NUNCA** altere notas no cofre Obsidian sem passar pela validação de `vault_srv.rs`.
+- **NUNCA** invoque utilitários de janelas transparentes, overlays nativos Win32 (funções `ensure_indicator_visible` e módulo `native_overlay` foram removidos no Tier 1) ou tente forçar popups visuais durante a orquestração de voz.
 - **NUNCA** use `unwrap()` em locks de concorrência (`Mutex` ou `RwLock`). Trate o erro graciosamente.

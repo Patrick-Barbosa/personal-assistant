@@ -1,7 +1,11 @@
+pub mod kanban;
+
 use crate::agent::SharedAgentCore;
+use crate::bridge::emitter::emit_kanban_changed;
 use crate::config::AppConfig;
 use crate::db::{Message, ScheduledRoutine, Session, SharedDatabase};
 use crate::indexer::{SearchResult, SharedIndexer};
+use crate::services::kanban_srv::{KanbanService, SharedKanbanService};
 use crate::skill_runner::SkillRunner;
 use crate::skills::{SkillInfo, SkillManager};
 use crate::vault::{Note, SharedVaultManager};
@@ -10,131 +14,22 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
 pub use crate::domain::models::SendMessageResponse;
+pub use kanban::*;
 
-#[cfg(target_os = "windows")]
-#[repr(C)]
-struct WinPoint {
-    x: i32,
-    y: i32,
-}
-
-#[cfg(target_os = "windows")]
-extern "system" {
-    fn GetCursorPos(lp_point: *mut WinPoint) -> i32;
-}
-
-pub fn get_global_cursor_pos() -> Option<(i32, i32)> {
-    #[cfg(target_os = "windows")]
-    unsafe {
-        let mut pt = WinPoint { x: 0, y: 0 };
-        if GetCursorPos(&mut pt) != 0 {
-            return Some((pt.x, pt.y));
-        }
-    }
-    None
-}
-
-pub fn toggle_overlay_window(app: &AppHandle, visible: Option<bool>) -> Result<bool, String> {
+pub fn focus_main_window(app: &AppHandle) -> Result<bool, String> {
     if let Some(window) = app.get_webview_window("main") {
-        let is_vis = window.is_visible().unwrap_or(false);
-        let is_focused = window.is_focused().unwrap_or(false);
-
-        // Se o usuário especificou o estado explicitamente, respeita.
-        // Se foi acionado pelo atalho (visible == None):
-        // Se está visível E focada -> esconde.
-        // Se está escondida, ou visível mas em segundo plano (sem foco) -> traz para a frente e foca!
-        let target_vis = visible.unwrap_or(if is_vis && is_focused { false } else { true });
-
-        if !target_vis {
-            window.hide().map_err(|e| e.to_string())?;
-            let _ = app.emit("overlay-toggled", false);
-            if let Some(tts) = app.try_state::<crate::tts::SharedTtsClient>() {
-                tts.fade_out_and_stop(300);
-            }
-            Ok(false)
-        } else {
-            // Posiciona a janela no monitor ativo onde o cursor do mouse estiver no momento exato do atalho
-            let cursor_coords = get_global_cursor_pos().or_else(|| {
-                window
-                    .cursor_position()
-                    .ok()
-                    .map(|p| (p.x as i32, p.y as i32))
-            });
-
-            if let Some((cur_x, cur_y)) = cursor_coords {
-                if let Ok(monitors) = window.available_monitors() {
-                    for m in monitors {
-                        let m_pos = m.position();
-                        let m_size = m.size();
-                        let mx = m_pos.x;
-                        let my = m_pos.y;
-                        let mw = m_size.width as i32;
-                        let mh = m_size.height as i32;
-                        if cur_x >= mx && cur_x < mx + mw && cur_y >= my && cur_y < my + mh {
-                            let scale = m.scale_factor();
-                            let win_w = (960.0 * scale) as i32;
-                            let win_h = (640.0 * scale) as i32;
-                            // Clamp para garantir que a janela permaneça visível mesmo com scale/DPI inesperado
-                            let mut cx = mx + (mw - win_w) / 2;
-                            let mut cy = my + (mh - win_h) / 2;
-                            // Se a janela for maior que o monitor, ancora com margem mínima de 10px
-                            if win_w >= mw {
-                                cx = mx + 10;
-                            } else {
-                                cx = cx.max(mx + 10).min(mx + mw - win_w - 10);
-                            }
-                            if win_h >= mh {
-                                cy = my + 10;
-                            } else {
-                                cy = cy.max(my + 10).min(my + mh - win_h - 10);
-                            }
-                            // Fallback adicional: garante coordenadas não-negativas absurdas
-                            cx = cx.max(mx);
-                            cy = cy.max(my);
-                            let _ = window.set_position(tauri::Position::Physical(
-                                tauri::PhysicalPosition { x: cx, y: cy },
-                            ));
-                            println!("[OVERLAY] Posicionado em monitor ({}, {} {}x{}) -> janela em ({}, {}) scale={}", mx, my, mw, mh, cx, cy, scale);
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Ao abrir overlay durante fala, faz fade out (requisito: voz deve abaixar e sumir)
-            if let Some(tts) = app.try_state::<crate::tts::SharedTtsClient>() {
-                tts.fade_out_and_stop(300);
-            }
-            window.show().map_err(|e| e.to_string())?;
-            window.unminimize().map_err(|e| e.to_string())?;
-            window.set_always_on_top(true).map_err(|e| e.to_string())?;
-            window.set_focus().map_err(|e| e.to_string())?;
-            let _ = app.emit("overlay-toggled", true);
-            // Não oculta o Sol no meio de uma interação por voz (janela vai do 1º "copernico" ao encerrar).
-            let voice_active = app
-                .try_state::<crate::wake_word::SharedWakeWordService>()
-                .map(|w| w.voice_active())
-                .unwrap_or(false);
-            if !voice_active {
-                #[cfg(windows)]
-                crate::native_overlay::hide();
-                if let Some(indicator_win) = app.get_webview_window("indicator") {
-                    let _ = indicator_win.hide();
-                }
-                println!("[SOL] hide indicator (toggle-overlay)");
-            } else {
-                println!("[SOL] keep indicator (toggle-overlay durante voz)");
-            }
-            Ok(true)
-        }
+        window.show().map_err(|e| e.to_string())?;
+        window.unminimize().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+        Ok(true)
     } else {
         Err("Janela 'main' não encontrada".into())
     }
 }
 
 #[tauri::command]
-pub async fn toggle_overlay(app: AppHandle, visible: Option<bool>) -> Result<bool, String> {
-    toggle_overlay_window(&app, visible)
+pub async fn show_main_window(app: AppHandle) -> Result<bool, String> {
+    focus_main_window(&app)
 }
 
 #[tauri::command]
@@ -186,19 +81,16 @@ pub async fn send_message(
     session_id: String,
     content: String,
     origin: Option<String>,
-    app: AppHandle,
+    _app: AppHandle,
     agent: State<'_, SharedAgentCore>,
     db: State<'_, SharedDatabase>,
 ) -> Result<SendMessageResponse, String> {
-    let overlay_visible = app
-        .get_webview_window("main")
-        .and_then(|w| w.is_visible().ok())
-        .unwrap_or(true);
-
     let origin_str = origin.unwrap_or_else(|| "text".to_string());
 
+    // Rota de texto: sempre prompt rico. A visibilidade da janela não altera
+    // o modo de resposta aqui (voz usa `overlay_visible=false` em `voice_orch`).
     let response = agent
-        .chat(&session_id, &content, &origin_str, overlay_visible)
+        .chat(&session_id, &content, &origin_str, true)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -416,24 +308,54 @@ pub async fn set_wake_detection_active(
 }
 
 #[tauri::command]
+pub async fn set_wake_mic_enabled(
+    enabled: bool,
+    wake_service: State<'_, crate::wake_word::SharedWakeWordService>,
+) -> Result<(), String> {
+    wake_service.set_mic_enabled(enabled);
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn cancel_wake_recording(
     wake_service: State<'_, crate::wake_word::SharedWakeWordService>,
     tts: State<'_, crate::tts::SharedTtsClient>,
 ) -> Result<(), String> {
     wake_service.cancel_recording();
-    // Descarte explícito pelo usuário encerra a janela de voz (o evento Cancel do sidecar confirma).
-    wake_service.set_voice_active(false);
     tts.fade_out_and_stop(250);
     Ok(())
 }
 
-/// Diagnóstico temporário: permite ao frontend do indicador despejar sua
-/// verdade local ([SOL-FRONT]) no log do backend, correlacionável com [SOL].
-/// Será removido (ou posto atrás de flag) quando a causa-raiz for confirmada.
 #[tauri::command]
-pub async fn report_sun_debug(message: String) -> Result<(), String> {
-    println!("[SOL-FRONT] {}", message);
+pub async fn start_manual_recording(
+    wake_service: State<'_, crate::wake_word::SharedWakeWordService>,
+    recorder: State<'_, crate::infra::hardware::SharedManualRecorder>,
+) -> Result<(), String> {
+    // Push-to-talk taps the same cpal device the wake engine holds, so the
+    // wake mic is released first. Small delay lets the orchestrator thread
+    // drain the control channel and drop its stream before we open ours.
+    wake_service.set_mic_enabled(false);
+    wake_service.set_detection_active(false);
+    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    if let Err(e) = recorder.start() {
+        wake_service.set_mic_enabled(true);
+        wake_service.set_detection_active(true);
+        return Err(e);
+    }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_manual_recording(
+    discard: bool,
+    wake_service: State<'_, crate::wake_word::SharedWakeWordService>,
+    recorder: State<'_, crate::infra::hardware::SharedManualRecorder>,
+) -> Result<Option<Vec<u8>>, String> {
+    let res = recorder.stop(discard);
+    // Wake mic always resumes, even when capture failed or was discarded.
+    wake_service.set_mic_enabled(true);
+    wake_service.set_detection_active(true);
+    res
 }
 
 #[tauri::command]
@@ -885,12 +807,30 @@ pub async fn accept_inbox_item(
     db: State<'_, SharedDatabase>,
     vault: State<'_, SharedVaultManager>,
     indexer: State<'_, SharedIndexer>,
+    kanban: State<'_, SharedKanbanService>,
 ) -> Result<String, String> {
     let items = db.list_inbox_items().map_err(|e| e.to_string())?;
     let item = items
         .into_iter()
         .find(|i| i.id == id)
         .ok_or_else(|| format!("Item '{}' não encontrado na Inbox", id))?;
+
+    // Fase 3 — rollover do kanban: aceitar = carregar a pendência para a
+    // semana aberta (nenhuma nota é criada; a semana fechada é read-only).
+    if item.item_type == "kanban_rollover" {
+        let (task_id, _) =
+            KanbanService::parse_rollover_content(&item.content).map_err(|e| e.to_string())?;
+        let carried = kanban.carry_task(&task_id).map_err(|e| e.to_string())?;
+        let reason_ref = reason.as_deref();
+        let _ = db.mark_inbox_item_status_with_reason(&id, "read", reason_ref);
+        if let Ok(Some(updated)) = db.get_inbox_item(&id) {
+            mirror_inbox_decision(Some(&app), &db, &updated, "read", reason_ref);
+        }
+        if let Some(new_task) = carried {
+            let _ = emit_kanban_changed(&app, &new_task.week_id, "task_carried");
+        }
+        return Ok(String::new());
+    }
 
     let clean_title = item.title.trim();
     let base_name = crate::vault::sanitize_filename(clean_title);
@@ -1121,7 +1061,19 @@ pub async fn dismiss_inbox_item(
     reason: Option<String>,
     app: AppHandle,
     db: State<'_, SharedDatabase>,
+    kanban: State<'_, SharedKanbanService>,
 ) -> Result<(), String> {
+    // Fase 3 — rejeição do rollover kanban = cancelar a pendência da semana
+    // fechada (idempotente; a semana fechada é read-only para o board).
+    let mut rollover_week: Option<String> = None;
+    if let Ok(Some(item)) = db.get_inbox_item(&id) {
+        if item.item_type == "kanban_rollover" {
+            let (task_id, week_id) =
+                KanbanService::parse_rollover_content(&item.content).map_err(|e| e.to_string())?;
+            kanban.cancel_task(&task_id).map_err(|e| e.to_string())?;
+            rollover_week = Some(week_id);
+        }
+    }
     let reason_ref = reason.as_deref();
     db.mark_inbox_item_status_with_reason(&id, "dismissed", reason_ref)
         .map_err(|e| e.to_string())?;
@@ -1133,6 +1085,9 @@ pub async fn dismiss_inbox_item(
             "inbox-updated",
             serde_json::json!({ "unread_count": unread_count }),
         );
+    }
+    if let Some(week_id) = rollover_week {
+        let _ = emit_kanban_changed(&app, &week_id, "task_cancelled");
     }
     Ok(())
 }
@@ -1167,7 +1122,7 @@ pub async fn set_skill_cron(
     cron_expr: String,
     db: State<'_, SharedDatabase>,
 ) -> Result<(), String> {
-    let parts: Vec<&str> = cron_expr.trim().split_whitespace().collect();
+    let parts: Vec<&str> = cron_expr.split_whitespace().collect();
     if parts.len() != 5 {
         return Err("Expressão cron inválida. Deve conter exatamente 5 campos.".into());
     }
@@ -1249,6 +1204,14 @@ pub async fn get_user_profile(db: State<'_, SharedDatabase>) -> Result<serde_jso
         .get_setting("date_format")
         .map_err(|e| e.to_string())?
         .unwrap_or_else(|| "DD-MM-YY".to_string());
+    let deepseek_api_key = db
+        .get_setting("deepseek_api_key")
+        .map_err(|e| e.to_string())?
+        .unwrap_or_default();
+    let groq_api_key = db
+        .get_setting("groq_api_key")
+        .map_err(|e| e.to_string())?
+        .unwrap_or_default();
 
     Ok(serde_json::json!({
         "name": name,
@@ -1257,16 +1220,21 @@ pub async fn get_user_profile(db: State<'_, SharedDatabase>) -> Result<serde_jso
         "onboarding_completed": onboarding_completed == "true",
         "custom_instructions": custom_instructions,
         "date_format": date_format,
+        "deepseek_api_key": deepseek_api_key,
+        "groq_api_key": groq_api_key,
     }))
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn save_user_profile(
     name: String,
     communication_style: String,
     hotkey: String,
     custom_instructions: Option<String>,
     date_format: Option<String>,
+    deepseek_api_key: Option<String>,
+    groq_api_key: Option<String>,
     app: AppHandle,
     db: State<'_, SharedDatabase>,
 ) -> Result<(), String> {
@@ -1290,17 +1258,28 @@ pub async fn save_user_profile(
             .map_err(|e| e.to_string())?;
         crate::vault::set_active_date_format(clean_df);
     }
+    if let Some(dk) = deepseek_api_key {
+        db.set_setting("deepseek_api_key", dk.trim())
+            .map_err(|e| e.to_string())?;
+    }
+    if let Some(gk) = groq_api_key {
+        db.set_setting("groq_api_key", gk.trim())
+            .map_err(|e| e.to_string())?;
+    }
 
     let _ = update_shortcut_internal(&app, clean_hotkey);
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn save_onboarding_profile(
     name: String,
     communication_style: String,
     hotkey: String,
     date_format: Option<String>,
+    deepseek_api_key: Option<String>,
+    groq_api_key: Option<String>,
     app: AppHandle,
     db: State<'_, SharedDatabase>,
 ) -> Result<(), String> {
@@ -1310,10 +1289,52 @@ pub async fn save_onboarding_profile(
         hotkey,
         None,
         date_format,
+        deepseek_api_key,
+        groq_api_key,
         app,
         db,
     )
     .await
+}
+
+#[tauri::command]
+pub async fn get_api_keys(
+    db: State<'_, SharedDatabase>,
+    config: State<'_, Arc<crate::config::AppConfig>>,
+) -> Result<serde_json::Value, String> {
+    let deepseek_api_key = db
+        .get_setting("deepseek_api_key")
+        .map_err(|e| e.to_string())?
+        .unwrap_or_else(|| config.deepseek_api_key.clone());
+    let groq_api_key = db
+        .get_setting("groq_api_key")
+        .map_err(|e| e.to_string())?
+        .unwrap_or_else(|| config.groq_api_key.clone());
+
+    Ok(serde_json::json!({
+        "deepseek_api_key": deepseek_api_key,
+        "groq_api_key": groq_api_key,
+    }))
+}
+
+#[tauri::command]
+pub async fn save_api_keys(
+    deepseek_api_key: String,
+    groq_api_key: String,
+    db: State<'_, SharedDatabase>,
+) -> Result<(), String> {
+    db.set_setting("deepseek_api_key", deepseek_api_key.trim())
+        .map_err(|e| e.to_string())?;
+    db.set_setting("groq_api_key", groq_api_key.trim())
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn reset_onboarding(db: State<'_, SharedDatabase>) -> Result<(), String> {
+    db.set_setting("onboarding_completed", "false")
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -1472,7 +1493,7 @@ pub async fn save_scheduled_routine(
     }
     // Gera ID se vazio (usa UUID para evitar colisão de Date.now)
     if routine.id.trim().is_empty() {
-        routine.id = format!("routine_{}", uuid::Uuid::new_v4().simple().to_string());
+        routine.id = format!("routine_{}", uuid::Uuid::new_v4().simple());
     }
     if routine.created_at.trim().is_empty() {
         routine.created_at = chrono::Utc::now().to_rfc3339();

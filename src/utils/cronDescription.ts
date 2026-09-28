@@ -81,6 +81,47 @@ export function describeCron(expr: string): string {
   return `Minuto: ${min} | Hora: ${hour} | Dia: ${dom} | Mês: ${mon} | Sem: ${dow}`;
 }
 
+/**
+ * Inverso de `previewCron`/`optionsToCron`: cron de 5 campos → estado do
+ * formulário de hábito (`hora` "HH:MM" + `dias` 0..6, dom=0). Usado para
+ * pré-preencher a edição de um hábito existente.
+ *
+ * Melhor esforço: campos fora do padrão do app caem nos defaults do form
+ * ("09:00" / todos os dias) em vez de invalidar a edição.
+ */
+export function parseHabitCron(expr: string): { hora: string; dias: number[] } {
+  const parts = expr.trim().split(/\s+/);
+  const fallback = { hora: "09:00", dias: [] as number[] };
+  if (parts.length !== 5) return fallback;
+
+  const [min, hour, , , dow] = parts;
+  const h = Number(hour);
+  const m = Number(min);
+  const hora =
+    Number.isInteger(h) && Number.isInteger(m) && h >= 0 && h <= 23 && m >= 0 && m <= 59
+      ? `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+      : fallback.hora;
+
+  let dias: number[] = [];
+  if (dow === "*" || dow === "") {
+    dias = [];
+  } else if (/^\d+-\d+$/.test(dow)) {
+    const [lo, hi] = dow.split("-").map(Number);
+    if (lo <= hi && lo >= 0 && hi <= 7) {
+      for (let d = lo; d <= hi; d++) dias.push(d);
+    } else {
+      return { hora, dias: fallback.dias };
+    }
+  } else {
+    dias = dow
+      .split(",")
+      .map((d) => Number(d.trim()))
+      .filter((d) => Number.isInteger(d) && d >= 0 && d <= 7)
+      .map((d) => (d === 7 ? 0 : d)); // cron aceita 7=Dom; o form usa 0
+  }
+  return { hora, dias: [...new Set(dias)].sort((a, b) => a - b) };
+}
+
 export function optionsToCron(opts: FriendlyCronOptions): string {
   const [hStr, mStr] = opts.time.split(":");
   const h = parseInt(hStr || "9", 10);

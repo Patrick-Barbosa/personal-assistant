@@ -1,0 +1,21 @@
+# Regras do watcher do `tauri dev` (estilo .gitignore).
+# Mantido em sincronia com server.watch.ignored em vite.config.ts.
+
+# Build Rust (churn de artefatos durante compilação)
+src-tauri/target/
+
+# Cofres Markdown (somente leitura para escrita autônoma) e dados mutáveis em runtime
+cofres/
+logs/
+*.log
+
+# SQLite WAL/shm churn em runtime
+*.db
+*.db-shm
+*.db-wal
+*.db.bak
+*.db.pre_reset_backup
+
+# Dependências e cache de modelos
+node_modules/
+.fastembed_cache/

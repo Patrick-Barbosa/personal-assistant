@@ -314,9 +314,8 @@ TRANSCRIÇÃO DO DIÁLOGO:
         .collect();
 
     if checklist_lines.is_empty() {
-        checklist_lines.push(format!(
-            "- [ ] EXECUTE | Motivo: Consolidar informações da sessão"
-        ));
+        checklist_lines
+            .push("- [ ] EXECUTE | Motivo: Consolidar informações da sessão".to_string());
     }
 
     // 4. FASE 2: Prompt do curador-EXECUTOR com tools (leitura + escrita total).
@@ -851,18 +850,17 @@ TRANSCRIÇÃO DO DIÁLOGO:
             .and_then(|msgs| msgs.iter().rev().find(|m| m.role == "assistant").cloned())
             .map(|last| last.content.trim() != mirror.trim())
             .unwrap_or(true);
-        if should_insert {
-            if db
+        if should_insert
+            && db
                 .add_message(session_id, "assistant", &mirror, None, None)
                 .is_ok()
-            {
-                println!(
-                    "[CONSOLIDATION] Espelho registrado no chat da sessão '{}'.",
-                    session_id
-                );
-                if let Some(ref app) = app_handle {
-                    crate::commands::emit_chat_and_inbox(app, &db, session_id);
-                }
+        {
+            println!(
+                "[CONSOLIDATION] Espelho registrado no chat da sessão '{}'.",
+                session_id
+            );
+            if let Some(ref app) = app_handle {
+                crate::commands::emit_chat_and_inbox(app, &db, session_id);
             }
         }
     }

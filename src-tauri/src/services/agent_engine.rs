@@ -86,6 +86,7 @@ impl AgentCore {
     }
 
     /// Executa turno com overrides de prompt, limite de iterações e restrição de ferramentas (para Skills)
+    #[allow(clippy::too_many_arguments)]
     pub async fn chat_with_options(
         &self,
         session_id: &str,
@@ -335,7 +336,9 @@ impl AgentCore {
         // Obtém ferramentas mescladas (Built-in + MCP) ou filtradas por skill/modo
         let tools = if origin == "voice" {
             // No modo de voz (overlay fechado): baixa latência, só consulta e interação natural por áudio.
-            // Permitido: busca/leitura, skills de leitura/visão (ex: screen-capture via executar_script_skill), e encerrar.
+            // Permitido: busca/leitura, skills de leitura/visão (ex: screen-capture via executar_script_skill),
+            // administração do board kanban (criar/mover tarefa e hábito — escreve só no SQLite do board, nunca no cofre),
+            // e encerrar.
             // Perguntas e confirmações em modo de voz são feitas diretamente na fala conversacional, sem poluir a Inbox.
             // PROIBIDO: criar/atualizar/deletar notas, propor_melhoria_instrucao ou qualquer escrita no cofre.
             // Se o usuário pedir para anotar/guardar, NÃO diga "não posso"; diga "vou anotar logo após nossa conversa" — o consolidador fará.
@@ -343,6 +346,9 @@ impl AgentCore {
                 "buscar_notas".to_string(),
                 "ler_nota".to_string(),
                 "executar_script_skill".to_string(),
+                "criar_tarefa".to_string(),
+                "mover_tarefa".to_string(),
+                "criar_habito".to_string(),
                 "encerrar_sessao".to_string(),
             ]))
         } else if let Some(allowed) = allowed_tools {
@@ -557,22 +563,22 @@ impl AgentCore {
                     task::spawn(async move {
                         if let Ok(title) = llm_clone.generate_title(&u_msg, &a_resp).await {
                             let clean_title = title.trim().trim_matches('"').trim().to_string();
-                            if !clean_title.is_empty() {
-                                if let Ok(_) = db_clone.rename_session(&sid_clone, &clean_title) {
-                                    println!(
-                                        "[AGENT] Sessão '{}' auto-titulada com sucesso: '{}'",
-                                        sid_clone, clean_title
+                            if !clean_title.is_empty()
+                                && db_clone.rename_session(&sid_clone, &clean_title).is_ok()
+                            {
+                                println!(
+                                    "[AGENT] Sessão '{}' auto-titulada com sucesso: '{}'",
+                                    sid_clone, clean_title
+                                );
+                                if let Some(app) = app_handle_opt {
+                                    use tauri::Emitter;
+                                    let _ = app.emit(
+                                        "session-renamed",
+                                        serde_json::json!({
+                                            "id": sid_clone,
+                                            "title": clean_title,
+                                        }),
                                     );
-                                    if let Some(app) = app_handle_opt {
-                                        use tauri::Emitter;
-                                        let _ = app.emit(
-                                            "session-renamed",
-                                            serde_json::json!({
-                                                "id": sid_clone,
-                                                "title": clean_title,
-                                            }),
-                                        );
-                                    }
                                 }
                             }
                         }

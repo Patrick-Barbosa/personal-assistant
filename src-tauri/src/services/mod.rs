@@ -1,6 +1,8 @@
 pub mod agent_engine;
 pub mod consolidation_srv;
 pub mod greeting_srv;
+pub mod habit_srv;
+pub mod kanban_srv;
 pub mod memory_srv;
 pub mod plugin_srv;
 pub mod skill_runner_srv;
@@ -12,6 +14,8 @@ pub mod voice_orch;
 pub use agent_engine::*;
 pub use consolidation_srv::*;
 pub use greeting_srv::*;
+pub use habit_srv::*;
+pub use kanban_srv::*;
 pub use memory_srv::*;
 pub use plugin_srv::*;
 pub use skill_runner_srv::*;

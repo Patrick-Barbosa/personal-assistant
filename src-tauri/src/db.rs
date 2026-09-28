@@ -194,6 +194,9 @@ impl Database {
             [],
         );
 
+        // Migrações do Kanban Semanal, hábitos e índice de entidades.
+        crate::infra::sqlite::run_kanban_migrations(&conn)?;
+
         Ok(Self { pool })
     }
 
@@ -357,6 +360,7 @@ impl Database {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_message_with_meta(
         &self,
         session_id: &str,
@@ -557,6 +561,7 @@ impl Database {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_inbox_item_full(
         &self,
         session_id: Option<&str>,
@@ -734,7 +739,7 @@ impl Database {
             "DELETE FROM inbox_items WHERE status = 'dismissed' AND COALESCE(updated_at, created_at) < ?1",
             params![cutoff],
         )?;
-        Ok(affected as usize)
+        Ok(affected)
     }
 
     pub fn prune_dismissed_expired(
@@ -954,6 +959,50 @@ impl Database {
             results.push(r?);
         }
         Ok(results)
+    }
+
+    /// Métrica de hábito **derivada da task** (`category='habito'`,
+    /// `metric_key=habit_id`, `record_date=due_date`, `value=1`).
+    /// Idempotente: substitui a linha do dia (a task é a fonte única —
+    /// nada é gravado por `registrar_metrica` para hábitos).
+    pub fn upsert_habit_metric(
+        &self,
+        metric_key: &str,
+        record_date: &str,
+        notes: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let conn = self.pool.get()?;
+        conn.execute(
+            "DELETE FROM user_tabular_data
+             WHERE category = 'habito' AND metric_key = ?1 AND record_date = ?2",
+            params![metric_key, record_date],
+        )?;
+        let id = format!(
+            "metric_{}_{}",
+            Utc::now().timestamp_millis(),
+            &uuid::Uuid::new_v4().to_string()[..8]
+        );
+        conn.execute(
+            "INSERT INTO user_tabular_data (id, category, record_date, metric_key, metric_value, notes, note_ref, created_at)
+             VALUES (?1, 'habito', ?2, ?3, 1.0, ?4, NULL, ?5)",
+            params![id, record_date, metric_key, notes, Utc::now().to_rfc3339()],
+        )?;
+        Ok(())
+    }
+
+    /// Saiu do `done`: remove a linha do dia (task = fonte única da métrica).
+    pub fn delete_habit_metric(
+        &self,
+        metric_key: &str,
+        record_date: &str,
+    ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
+        let conn = self.pool.get()?;
+        let affected = conn.execute(
+            "DELETE FROM user_tabular_data
+             WHERE category = 'habito' AND metric_key = ?1 AND record_date = ?2",
+            params![metric_key, record_date],
+        )?;
+        Ok(affected)
     }
 }
 

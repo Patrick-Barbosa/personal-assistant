@@ -23,178 +23,35 @@ import {
   Layers,
   CornerDownRight,
   Brain,
+  CalendarDays,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "../api";
 import { InboxItem, InboxItemType } from "../types";
 import { RejectReasonModal } from "./RejectReasonModal";
+import { DiffSideBySideModal } from "./DiffSideBySideModal";
 
 interface InboxViewProps {
   onOpenSession: (sessionId: string) => void;
   onRefreshUnreadCount?: () => void;
 }
 
-interface DiffModalProps {
-  item: InboxItem;
-  onClose: () => void;
-  onEvolve: (id: string) => Promise<void>;
-  isLoading: boolean;
+/** Payload JSON de um item `kanban_rollover` (definido no backend). */
+interface KanbanRolloverPayload {
+  task_id?: string;
+  week_id?: string;
+  titulo?: string;
 }
 
-const DiffSideBySideModal: React.FC<DiffModalProps> = ({
-  item,
-  onClose,
-  onEvolve,
-  isLoading,
-}) => {
-  const [originalContent, setOriginalContent] = useState<string>("");
-  const [isLoadingOriginal, setIsLoadingOriginal] = useState<boolean>(true);
-
-  useEffect(() => {
-    const fetchOriginal = async () => {
-      // Se for uma proposta com proposed_content, item.content já contém o original
-      if (item.proposed_content && item.content) {
-        setOriginalContent(item.content);
-        setIsLoadingOriginal(false);
-        return;
-      }
-
-      if (item.target_base_note_slug) {
-        try {
-          const note = await api.readNote(item.target_base_note_slug);
-          setOriginalContent(note.content || note.corpo || "");
-        } catch (e) {
-          setOriginalContent(
-            typeof item.diff_data === "object" && item.diff_data?.original_snippet
-              ? item.diff_data.original_snippet
-              : item.content || "*Nota base original ainda não indexada no cofre.*"
-          );
-        } finally {
-          setIsLoadingOriginal(false);
-        }
-      } else {
-        setOriginalContent(
-          typeof item.diff_data === "object" && item.diff_data?.original_snippet
-            ? item.diff_data.original_snippet
-            : item.content || "*Esta proposta é inédita ou não possui nota ancestral no Obsidian.*"
-        );
-        setIsLoadingOriginal(false);
-      }
-    };
-    fetchOriginal();
-  }, [item]);
-
-  const proposed = item.proposed_content || item.content;
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
-      <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-3xl w-full max-w-5xl h-[88vh] flex flex-col shadow-2xl overflow-hidden">
-        {/* Modal Header */}
-        <div className="p-5 border-b border-[var(--border-subtle)] flex items-center justify-between gap-4 shrink-0 bg-white/[0.02]">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="p-2.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
-              <GitCompare size={20} />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-[var(--text-primary)] truncate">
-                  Diff Lado a Lado: {item.title}
-                </h3>
-                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 font-mono text-[10px] font-bold">
-                  Evolução In-Place
-                </span>
-              </div>
-              <p className="text-xs text-[var(--text-muted)] truncate">
-                Nota Canônica Original ➔ Versão Proposta com Histórico de Alterações
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => onEvolve(item.id)}
-              disabled={isLoading}
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-amber-500/20 disabled:opacity-50 cursor-pointer"
-            >
-              {isLoading ? (
-                <RefreshCw size={14} className="animate-spin" />
-              ) : (
-                <CheckCircle2 size={14} />
-              )}
-              <span>Aprovar e Gravar Evolução</span>
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all"
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-
-        {/* Modal Split View */}
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-[var(--border-subtle)] overflow-hidden">
-          {/* Lado Esquerdo: Original (Obsidian R/O ou Canonical Default) */}
-          <div className="flex flex-col h-full overflow-hidden bg-black/20">
-            <div className="p-3 px-5 border-b border-[var(--border-subtle)] flex items-center justify-between bg-white/[0.01]">
-              <div className="flex items-center gap-2 text-xs font-semibold text-cyan-400">
-                <span className="w-2 h-2 rounded-full bg-cyan-400" />
-                <span>Base Original (Canônica)</span>
-              </div>
-              {item.target_base_note_slug && (
-                <span className="text-[10px] font-mono text-[var(--text-muted)]">
-                  [[{item.target_base_note_slug}]]
-                </span>
-              )}
-            </div>
-            <div className="flex-1 p-5 overflow-y-auto select-text font-mono text-xs leading-relaxed text-[var(--text-muted)]">
-              {isLoadingOriginal ? (
-                <div className="flex items-center gap-2 text-xs py-4 text-[var(--text-muted)]">
-                  <RefreshCw size={14} className="animate-spin" />
-                  <span>Carregando nota ancestral...</span>
-                </div>
-              ) : (
-                <pre className="whitespace-pre-wrap font-sans text-xs">{originalContent}</pre>
-              )}
-            </div>
-          </div>
-
-          {/* Lado Direito: Proposta de Evolução (Copernico) */}
-          <div className="flex flex-col h-full overflow-hidden bg-amber-500/[0.015]">
-            <div className="p-3 px-5 border-b border-[var(--border-subtle)] flex items-center justify-between bg-amber-500/5">
-              <div className="flex items-center gap-2 text-xs font-semibold text-amber-400">
-                <span className="w-2 h-2 rounded-full bg-amber-400" />
-                <span>Versão Proposta (Evolução In-Place)</span>
-              </div>
-              <span className="text-[10px] font-mono text-amber-400/80">
-                {item.target_base_note_slug ? `cofres/default/${item.target_base_note_slug}.md` : "Evolução"}
-              </span>
-            </div>
-            <div className="flex-1 p-5 overflow-y-auto select-text font-mono text-xs leading-relaxed text-[var(--text-primary)]">
-              <div className="prose dark:prose-invert prose-xs max-w-none text-xs leading-relaxed">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {proposed}
-                </ReactMarkdown>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Modal Footer Banner */}
-        <div className="p-3 px-5 border-t border-[var(--border-subtle)] bg-white/[0.01] flex items-center justify-between text-xs text-[var(--text-muted)]">
-          <span>
-            Ao aprovar, a nota canônica será atualizada diretamente no cofre com o histórico de alterações anexado.
-          </span>
-          <span className="font-mono text-[10px] text-amber-400/70">
-            Regra R/O Obsidian: Preservada
-          </span>
-        </div>
-      </div>
-    </div>
-  );
+const parseRolloverContent = (content: string): KanbanRolloverPayload => {
+  try {
+    const value: unknown = JSON.parse(content);
+    if (value && typeof value === "object") return value as KanbanRolloverPayload;
+  } catch {
+    // Conteúdo não é JSON (item legado) — o card degrada para o título.
+  }
+  return {};
 };
 
 export const InboxView: React.FC<InboxViewProps> = ({
@@ -298,6 +155,31 @@ export const InboxView: React.FC<InboxViewProps> = ({
     const target = items.find((i) => i.id === id);
     if (!target) return;
     setRejectTarget({ id, title: target.title, mode: "dismiss" });
+  };
+
+  // Fase 3 — rollover kanban: aceitar carrega a pendência para a semana aberta.
+  const handleCarry = async (id: string) => {
+    try {
+      await api.acceptInboxItem(id, "carregada para a semana nova");
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === id
+            ? {
+                ...i,
+                status: "read" as const,
+                decision_reason: "carregada para a semana nova",
+              }
+            : i
+        )
+      );
+      onRefreshUnreadCount?.();
+      setActionFeedback({ id, msg: "Tarefa carregada para a semana nova!" });
+      setTimeout(() => setActionFeedback(null), 4000);
+    } catch (err) {
+      console.error("Erro ao carregar pendência do kanban:", err);
+      setActionFeedback({ id, msg: `Erro ao carregar a tarefa: ${err}` });
+      setTimeout(() => setActionFeedback(null), 4000);
+    }
   };
 
   const handleSnooze = async (id: string) => {
@@ -434,6 +316,13 @@ export const InboxView: React.FC<InboxViewProps> = ({
             Decisão / Tarefa
           </span>
         );
+      case "kanban_rollover":
+        return (
+          <span className="px-2 py-0.5 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 text-[10px] font-bold flex items-center gap-1">
+            <CalendarDays size={11} />
+            Kanban · Semana Encerrada
+          </span>
+        );
       case "instruction_improvement":
         return (
           <span className="px-2 py-0.5 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-400 text-[10px] font-bold flex items-center gap-1">
@@ -566,6 +455,8 @@ export const InboxView: React.FC<InboxViewProps> = ({
             const isExpanded = expandedId === item.id;
             const isPending = item.status === "unread" || item.status === "pending";
             const isApplied = item.status === "applied";
+            const isRollover = item.item_type === "kanban_rollover";
+            const rollover = isRollover ? parseRolloverContent(item.content) : null;
 
             return (
               <div
@@ -592,6 +483,11 @@ export const InboxView: React.FC<InboxViewProps> = ({
                         {item.title}
                       </h4>
                       {renderBadge(item.item_type)}
+                      {isRollover && rollover?.week_id && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 font-mono shrink-0">
+                          semana {rollover.week_id}
+                        </span>
+                      )}
                       {item.target_base_note_slug && (
                         <span className="text-[10px] px-2 py-0.5 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 font-mono shrink-0">
                           base: [[{item.target_base_note_slug}]]
@@ -655,11 +551,29 @@ export const InboxView: React.FC<InboxViewProps> = ({
                 {/* Expanded Content Body */}
                 {isExpanded && (
                   <div className="px-5 py-4 border-t border-[var(--border-subtle)] bg-[var(--bg-input)]/50 select-text animate-in fade-in duration-150">
-                    <div className="prose dark:prose-invert prose-xs max-w-none text-xs leading-relaxed">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {item.proposed_content || item.content}
-                      </ReactMarkdown>
-                    </div>
+                    {isRollover ? (
+                      <div className="text-xs leading-relaxed text-[var(--text-primary)] space-y-1.5">
+                        <p>
+                          <strong>Tarefa:</strong> {rollover?.titulo || item.title}
+                        </p>
+                        <p>
+                          <strong>Semana encerrada:</strong>{" "}
+                          <span className="font-mono">{rollover?.week_id || "—"}</span>
+                        </p>
+                        <p className="text-[var(--text-muted)] pt-1.5">
+                          O quadro fechado permanece somente leitura.{" "}
+                          <strong>Carregar para a semana nova</strong> recria esta tarefa
+                          no quadro atual; <strong>Cancelar tarefa</strong> marca a
+                          pendência como cancelada. Hábitos não entram no rollover.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="prose dark:prose-invert prose-xs max-w-none text-xs leading-relaxed">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {item.proposed_content || item.content}
+                        </ReactMarkdown>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -715,8 +629,22 @@ export const InboxView: React.FC<InboxViewProps> = ({
                       </button>
                     )}
 
+                    {/* Ação 1.0: [Carregar para a semana nova] — decisão do rollover kanban */}
+                    {isRollover && isPending && (
+                      <button
+                        type="button"
+                        onClick={() => handleCarry(item.id)}
+                        className="px-3 py-1.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                      >
+                        <CalendarDays size={12} />
+                        <span>Carregar para a semana nova</span>
+                      </button>
+                    )}
+
                     {/* Ação 1.1: [Evoluir Nota] com modal de Diff Lado a Lado (para propostas de notas) */}
-                    {item.item_type !== "instruction_improvement" && !isApplied && (
+                    {item.item_type !== "instruction_improvement" &&
+                      !isRollover &&
+                      !isApplied && (
                       <button
                         type="button"
                         onClick={() => setActiveDiffItem(item)}
@@ -728,7 +656,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
                     )}
 
                     {/* Ação 2: [Refinar com Prompt] */}
-                    {!isApplied && (
+                    {!isApplied && !isRollover && (
                       <button
                         type="button"
                         onClick={() => {
@@ -757,7 +685,7 @@ export const InboxView: React.FC<InboxViewProps> = ({
 
                   <div className="flex items-center gap-1.5">
                     {/* Ação 4: Soneca */}
-                    {!isApplied && (
+                    {!isApplied && !isRollover && (
                       <button
                         type="button"
                         onClick={() => handleSnooze(item.id)}
@@ -768,15 +696,19 @@ export const InboxView: React.FC<InboxViewProps> = ({
                       </button>
                     )}
 
-                    {/* Ação 5: Descartar */}
+                    {/* Ação 5: Descartar (no rollover kanban = Cancelar tarefa) */}
                     {!isApplied && (
                       <button
                         type="button"
                         onClick={() => handleDismiss(item.id)}
                         className="px-2.5 py-1 rounded-xl text-xs text-[var(--text-muted)] hover:text-rose-400 hover:bg-white/5 transition-all cursor-pointer"
-                        title="Descartar proposta"
+                        title={
+                          isRollover
+                            ? "Cancelar a pendência da semana encerrada"
+                            : "Descartar proposta"
+                        }
                       >
-                        Descartar
+                        {isRollover ? "Cancelar tarefa" : "Descartar"}
                       </button>
                     )}
 

@@ -324,7 +324,7 @@ impl VaultManager {
             for col in &effective_columns {
                 let val = fm_extra
                     .get(*col)
-                    .map(|v| Self::yaml_value_to_display(v))
+                    .map(Self::yaml_value_to_display)
                     .unwrap_or_else(|| "—".to_string());
                 doc.push_str(&format!(" {} |", val));
             }
@@ -414,7 +414,7 @@ impl VaultManager {
                 path: file.to_string_lossy().to_string(),
             });
         }
-        result.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+        result.sort_by_key(|a| a.title.to_lowercase());
         result
     }
 
@@ -422,10 +422,10 @@ impl VaultManager {
         path: &Path,
     ) -> Result<(NoteFrontmatter, String), Box<dyn std::error::Error + Send + Sync>> {
         let raw = fs::read_to_string(path)?;
-        if raw.starts_with("---") {
-            if let Some(second_dash) = raw[3..].find("---") {
-                let yaml_slice = &raw[3..3 + second_dash].trim();
-                let body_slice = raw[3 + second_dash + 3..].trim();
+        if let Some(rest) = raw.strip_prefix("---") {
+            if let Some(second_dash) = rest.find("---") {
+                let yaml_slice = rest[..second_dash].trim();
+                let body_slice = rest[second_dash + 3..].trim();
                 if let Ok(fm) = serde_yaml::from_str::<NoteFrontmatter>(yaml_slice) {
                     return Ok((fm, body_slice.to_string()));
                 }
@@ -439,15 +439,15 @@ impl VaultManager {
         content: &str,
         frontmatter: &NoteFrontmatter,
     ) -> String {
-        if let Some(ref t) = frontmatter.titulo.as_ref().or(frontmatter.title.as_ref()) {
+        if let Some(t) = frontmatter.titulo.as_ref().or(frontmatter.title.as_ref()) {
             if !t.trim().is_empty() {
                 return t.trim().to_string();
             }
         }
         for line in content.lines() {
             let trimmed = line.trim();
-            if trimmed.starts_with("# ") {
-                return trimmed[2..].trim().to_string();
+            if let Some(stripped) = trimmed.strip_prefix("# ") {
+                return stripped.trim().to_string();
             }
         }
         path.file_stem()
@@ -508,11 +508,23 @@ impl VaultManager {
         // 2. Relativo direto
         let cand_def = self.default_vault.join(p);
         if cand_def.exists() {
-            return Some((cand_def, "default".to_string()));
+            if let (Ok(canon_cand), Ok(canon_root)) =
+                (cand_def.canonicalize(), self.default_vault.canonicalize())
+            {
+                if canon_cand.starts_with(&canon_root) {
+                    return Some((cand_def, "default".to_string()));
+                }
+            }
         }
         let cand_obs = self.obsidian_vault.join(p);
         if cand_obs.exists() {
-            return Some((cand_obs, "obsidian".to_string()));
+            if let (Ok(canon_cand), Ok(canon_root)) =
+                (cand_obs.canonicalize(), self.obsidian_vault.canonicalize())
+            {
+                if canon_cand.starts_with(&canon_root) {
+                    return Some((cand_obs, "obsidian".to_string()));
+                }
+            }
         }
 
         // 3. Sanitizado com .md na raiz
@@ -599,6 +611,24 @@ impl VaultManager {
         tags: Option<Vec<String>>,
         topicos: Option<Vec<String>>,
     ) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
+        self.create_note_with_patch(titulo, corpo, tags, topicos, NoteFrontmatter::default())
+    }
+
+    /// Cria uma nota aplicando um **patch de frontmatter** por cima dos valores
+    /// padrão. Usado pelo Kanban para gravar `tipo: tarefa`/`tipo: entidade` e
+    /// as chaves extras (`kanban_id`, `semana`, `subtipo`) sem duplicar a
+    /// lógica de nomeação/escrita atômica de `create_note`.
+    ///
+    /// Só campos definidos no patch são sobrescritos (`Some`/lista não vazia);
+    /// `extra` é mesclado — as chaves do patch vencem as existentes.
+    pub fn create_note_with_patch(
+        &self,
+        titulo: &str,
+        corpo: &str,
+        tags: Option<Vec<String>>,
+        topicos: Option<Vec<String>>,
+        patch: NoteFrontmatter,
+    ) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
         let trimmed_title = titulo.trim();
         if trimmed_title.is_empty() {
             return Err("Título não pode ser vazio".into());
@@ -623,7 +653,7 @@ impl VaultManager {
             }
         }
 
-        let fm = NoteFrontmatter {
+        let mut fm = NoteFrontmatter {
             id: Some(id_str),
             titulo: Some(trimmed_title.to_string()),
             title: None,
@@ -632,6 +662,26 @@ impl VaultManager {
             topicos: topicos.unwrap_or_default(),
             ..Default::default()
         };
+
+        // Aplica o patch por cima dos valores padrão.
+        if patch.tipo.is_some() {
+            fm.tipo = patch.tipo;
+        }
+        if patch.id.is_some() {
+            fm.id = patch.id;
+        }
+        if patch.base_origem.is_some() {
+            fm.base_origem = patch.base_origem;
+        }
+        for (key, value) in patch.extra {
+            fm.extra.insert(key, value);
+        }
+        if !patch.tags.is_empty() {
+            fm.tags.extend(patch.tags);
+        }
+        if !patch.topicos.is_empty() {
+            fm.topicos.extend(patch.topicos);
+        }
 
         let yaml_header = serde_yaml::to_string(&fm)?;
         let full_text = format!("---\n{}---\n\n{}\n", yaml_header, corpo.trim());
@@ -1018,10 +1068,8 @@ impl VaultManager {
                     }
                 })
                 .to_string();
-            if changed && replaced != raw {
-                if Self::atomic_write(&file, &replaced).is_ok() {
-                    repointed_files.push(file);
-                }
+            if changed && replaced != raw && Self::atomic_write(&file, &replaced).is_ok() {
+                repointed_files.push(file);
             }
         }
 

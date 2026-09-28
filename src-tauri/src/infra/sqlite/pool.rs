@@ -158,5 +158,8 @@ pub fn create_pool(db_path: &Path) -> Result<DbPool, Box<dyn std::error::Error +
         [],
     );
 
+    // Migrações do Kanban Semanal, hábitos e índice de entidades.
+    crate::infra::sqlite::run_kanban_migrations(&conn)?;
+
     Ok(pool)
 }

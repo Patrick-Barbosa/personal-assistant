@@ -11,7 +11,6 @@ pub mod indexer;
 pub mod infra;
 pub mod llm;
 pub mod mcp;
-pub mod native_overlay;
 pub mod plugin_registry;
 pub mod providers;
 pub mod services;
@@ -32,6 +31,7 @@ use indexer::{Indexer, SharedIndexer};
 use llm::{LlmClient, SharedLlmClient};
 use mcp::McpManager;
 use plugin_registry::PluginRegistry;
+use services::kanban_srv::{KanbanService, SharedKanbanService};
 use skill_runner::SkillRunner;
 use std::sync::Arc;
 use stt::{GroqSttClient, SharedSttClient};
@@ -40,7 +40,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tool_registry::ToolRegistry;
 use tts::{EdgeTtsClient, SharedTtsClient, DEFAULT_TTS_VOICE};
 use vault::{SharedVaultManager, VaultManager};
-use wake_word::{start_wake_word_service, SharedWakeWordService, WakeWordService};
+use wake_word::{SharedWakeWordService, WakeWordService};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -94,17 +94,24 @@ pub fn run() {
     // Inicializa MCP Manager
     let mcp_manager = Arc::new(McpManager::new());
 
+    // Inicializa Kanban Semanal (quadro ISO + hábitos)
+    let kanban_service: SharedKanbanService =
+        Arc::new(KanbanService::new(database.clone(), vault_manager.clone()));
+
     // Inicializa ToolRegistry
     let tool_registry = Arc::new(ToolRegistry::new(
         database.clone(),
         vault_manager.clone(),
         indexer.clone(),
+        kanban_service.clone(),
         mcp_manager.clone(),
         config.skills_path.clone(),
     ));
 
     // Inicializa LLM Client
-    let llm_client: SharedLlmClient = Arc::new(LlmClient::new(config.clone()));
+    let llm_raw = Arc::new(LlmClient::new(config.clone()));
+    llm_raw.set_database(database.clone());
+    let llm_client: SharedLlmClient = llm_raw;
 
     // Inicializa AgentCore
     let agent_core: SharedAgentCore = Arc::new(AgentCore::new(
@@ -115,11 +122,15 @@ pub fn run() {
         indexer.clone(),
     ));
 
-    let stt_client: SharedSttClient =
-        Arc::new(GroqSttClient::new(&config.groq_api_key, &config.groq_model));
+    let groq_raw = Arc::new(GroqSttClient::new(&config.groq_api_key, &config.groq_model));
+    groq_raw.set_database(database.clone());
+    let stt_client: SharedSttClient = groq_raw;
 
     // Inicializa WakeWordService
     let wake_word_service: SharedWakeWordService = Arc::new(WakeWordService::new());
+
+    // Gravador manual push-to-talk (mesmo dispositivo cpal do wake engine)
+    let manual_recorder = Arc::new(crate::infra::hardware::ManualRecorder::new());
 
     // Inicializa EdgeTtsClient (Voz padrão: Thalita, ou recuperada do banco)
     let initial_tts_voice = database
@@ -172,6 +183,8 @@ pub fn run() {
     let database_clone = database.clone();
     let wake_word_service_clone = wake_word_service.clone();
     let skill_runner_clone = skill_runner.clone();
+    let tool_registry_clone = tool_registry.clone();
+    let kanban_runner_clone = kanban_service.clone();
     let greetings_clone = greetings_manager.clone();
     let greetings_startup = greetings_manager.clone();
     let thinking_clone = thinking_manager.clone();
@@ -185,8 +198,10 @@ pub fn run() {
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(move |app, _shortcut, event| {
                     if event.state() == ShortcutState::Pressed {
-                        println!("[HOTKEY] Atalho global pressionado! Alternando overlay...");
-                        let _ = commands::toggle_overlay_window(app, None);
+                        println!(
+                            "[HOTKEY] Atalho global pressionado! Trazendo janela principal..."
+                        );
+                        let _ = commands::focus_main_window(app);
                     }
                 })
                 .build(),
@@ -198,16 +213,21 @@ pub fn run() {
         .manage(stt_client as SharedSttClient)
         .manage(tts_client as SharedTtsClient)
         .manage(wake_word_service as SharedWakeWordService)
+        .manage(manual_recorder as crate::infra::hardware::SharedManualRecorder)
         .manage(plugin_registry.clone())
         .manage(tool_registry.clone())
         .manage(skill_runner.clone())
         .manage(mcp_manager.clone())
+        .manage(kanban_service.clone())
         .manage(greetings_manager.clone())
         .manage(thinking_manager.clone())
         .manage(config.clone())
         .setup(move |app| {
             agent_core_clone.set_app_handle(app.handle().clone());
+            tool_registry_clone.set_app_handle(app.handle().clone());
             skill_runner_clone.set_app_handle(app.handle().clone());
+            // Fase 3: o tick do scheduler fecha semanas vencidas (domingo 23h).
+            skill_runner_clone.set_kanban_service(kanban_runner_clone.clone());
             skill_runner_clone.start_scheduler();
 
             // Registra atalho global configurado
@@ -259,10 +279,6 @@ pub fn run() {
                 });
             }
 
-            // Inicializa o overlay nativo Win32 de voz (180 FPS, canal alfa real, zero WebView)
-            #[cfg(windows)]
-            crate::native_overlay::init(app.handle().clone());
-
             // Gera saudações no startup (síncrono no boot, em background para não travar UI)
             {
                 let gm = greetings_startup.clone();
@@ -291,8 +307,8 @@ pub fn run() {
                 });
             }
 
-            // Inicia serviço de escuta contínua de wake word em background
-            start_wake_word_service(
+            // Inicia serviço de escuta contínua de wake word em background (in-process)
+            workers::spawn_inprocess_wake(
                 app.handle().clone(),
                 config_clone.wake_word_models_dir.clone(),
                 agent_core_clone,
@@ -313,7 +329,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::toggle_overlay,
+            commands::show_main_window,
             commands::list_sessions,
             commands::get_messages,
             commands::new_session,
@@ -337,8 +353,10 @@ pub fn run() {
             commands::get_wake_word_threshold,
             commands::set_wake_word_threshold,
             commands::set_wake_detection_active,
+            commands::set_wake_mic_enabled,
             commands::cancel_wake_recording,
-            commands::report_sun_debug,
+            commands::start_manual_recording,
+            commands::stop_manual_recording,
             commands::delete_message,
             commands::time_travel_edit,
             commands::get_tts_voices,
@@ -378,6 +396,9 @@ pub fn run() {
             commands::get_user_profile,
             commands::save_onboarding_profile,
             commands::save_user_profile,
+            commands::get_api_keys,
+            commands::save_api_keys,
+            commands::reset_onboarding,
             commands::update_global_shortcut,
             commands::apply_instruction_improvement,
             commands::trigger_session_reflection,
@@ -399,6 +420,26 @@ pub fn run() {
             commands::list_greetings,
             commands::ensure_greetings,
             commands::preview_greeting,
+            commands::list_kanban_week,
+            commands::create_kanban_task,
+            commands::move_kanban_task,
+            commands::update_kanban_task,
+            commands::delete_kanban_task,
+            commands::create_task_note,
+            commands::get_task_note,
+            commands::save_task_note,
+            commands::link_task_note,
+            commands::unlink_task_note,
+            commands::list_entities,
+            commands::create_entity,
+            commands::link_task_entity,
+            commands::unlink_task_entity,
+            commands::list_habits,
+            commands::create_habit,
+            commands::update_habit,
+            commands::set_habit_active,
+            commands::delete_habit,
+            commands::list_insights,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao rodar aplicação Tauri Copernico");

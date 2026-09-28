@@ -42,7 +42,7 @@ impl SqliteInboxRepo {
                 params![cutoff],
             )
             .map_err(|e| DomainError::DatabaseError(e.to_string()))?;
-        Ok(affected as usize)
+        Ok(affected)
     }
 }
 

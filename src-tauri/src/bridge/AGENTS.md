@@ -5,7 +5,7 @@ Documentação especializada e constituição local para a camada de entrada Tau
 ## 1. Escopo e Responsabilidade
 Esta camada faz a ponte entre o frontend (React) e o backend (Rust):
 - `commands/`: Handlers de comando registrados no Tauri (`#[tauri::command]`).
-- `emitter.rs`: Funções fortemente tipadas para emissão de eventos em tempo real para a interface (`emit_overlay_toggled`, `emit_inbox_updated`, `emit_wake_status_changed`, etc.).
+- `emitter.rs`: Funções fortemente tipadas para emissão de eventos em tempo real para a interface (`emit_inbox_updated`, `emit_wake_status_changed`, etc.).
 
 ## 2. Regras Obrigatórias
 1. **Camada Fina (Thin Controller)**:

@@ -11,6 +11,12 @@ import {
   Check,
   Sparkles,
   RotateCcw,
+  KeyRound,
+  FileText,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  Mic,
 } from "lucide-react";
 import { CopernicoSquircle } from "./icons/CopernicoSquircle";
 import { api } from "../api";
@@ -77,14 +83,28 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   isOpen,
   onComplete,
 }) => {
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [name, setName] = useState("");
   const [selectedStyle, setSelectedStyle] = useState<string>("direto_conciso");
   const [selectedDateFormat, setSelectedDateFormat] = useState<string>("DD-MM-YY");
   const [selectedHotkey, setSelectedHotkey] = useState<string>("Ctrl+Space");
+  const [deepseekApiKey, setDeepseekApiKey] = useState("");
+  const [groqApiKey, setGroqApiKey] = useState("");
+  const [showDeepseek, setShowDeepseek] = useState(false);
+  const [showGroq, setShowGroq] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isRecordingHotkey, setIsRecordingHotkey] = useState(false);
   const [recordingModifiers, setRecordingModifiers] = useState<string | null>(null);
+  const [envRevealed, setEnvRevealed] = useState(false);
+
+  useEffect(() => {
+    api.getApiKeys().then((keys) => {
+      if (keys) {
+        setDeepseekApiKey(keys.deepseek_api_key || "");
+        setGroqApiKey(keys.groq_api_key || "");
+      }
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!isRecordingHotkey) return;
@@ -149,13 +169,17 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
         name.trim(),
         selectedStyle,
         selectedHotkey,
-        selectedDateFormat
+        selectedDateFormat,
+        deepseekApiKey.trim(),
+        groqApiKey.trim()
       );
       const profile: UserProfile = {
         name: name.trim(),
         communication_style: selectedStyle,
         hotkey: selectedHotkey,
         date_format: selectedDateFormat,
+        deepseek_api_key: deepseekApiKey.trim(),
+        groq_api_key: groqApiKey.trim(),
         onboarding_completed: true,
       };
       onComplete(profile);
@@ -199,10 +223,10 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           {/* Stepper Indicator */}
           <div className="flex items-center gap-3">
             <span className="text-[11px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-full shadow-inner">
-              Passo {step} de 4
+              Passo {step} de 5
             </span>
             <div className="flex items-center gap-1.5 p-1 rounded-full bg-black/40 border border-white/10">
-              {[1, 2, 3, 4].map((s) => {
+              {[1, 2, 3, 4, 5].map((s) => {
                 const isActive = step === s;
                 const isPast = s < step;
                 const isClickable =
@@ -248,7 +272,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 uppercase tracking-wider">
                     <User size={13} />
-                    <span>Passo 1 de 3 — Identidade</span>
+                    <span>Passo 1 de 5 — Identidade</span>
                   </div>
                   <h3 className="text-xl font-bold text-[var(--text-primary)]">
                     Como você gostaria de ser chamado?
@@ -299,7 +323,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 uppercase tracking-wider">
                     <Sparkles size={13} />
-                    <span>Passo 2 de 4 — Tom de Voz</span>
+                    <span>Passo 2 de 5 — Tom de Voz</span>
                   </div>
                   <h3 className="text-lg font-bold text-[var(--text-primary)]">
                     Qual estilo de comunicação você prefere?
@@ -371,7 +395,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 uppercase tracking-wider">
                     <Calendar size={13} />
-                    <span>Passo 3 de 4 — Formato de Data</span>
+                    <span>Passo 3 de 5 — Formato de Data</span>
                   </div>
                   <h3 className="text-lg font-bold text-[var(--text-primary)]">
                     Como você prefere formatar as datas?
@@ -441,14 +465,98 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
               >
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 uppercase tracking-wider">
+                    <KeyRound size={13} />
+                    <span>Passo 4 de 5 — Chaves de API</span>
+                  </div>
+                  <h3 className="text-lg font-bold text-[var(--text-primary)]">
+                    Configuração de Chaves de API
+                  </h3>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Forneça suas chaves de API para ativar o raciocínio do DeepSeek e a transcrição por voz (Groq Whisper). Se preferir, você também pode configurá-las via arquivo <code className="font-mono text-amber-300">.env</code> na raiz.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-[var(--border-subtle)] space-y-4">
+                  {/* DeepSeek API Key */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[var(--text-primary)] flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles size={13} className="text-amber-400" />
+                        DeepSeek API Key
+                      </span>
+                      <span className="text-[10px] text-[var(--text-muted)] font-normal">Recomendado</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showDeepseek ? "text" : "password"}
+                        value={deepseekApiKey}
+                        onChange={(e) => setDeepseekApiKey(e.target.value)}
+                        placeholder="sk-..."
+                        className="w-full px-3 py-2 pr-10 rounded-xl bg-black/40 border border-[var(--border-subtle)] focus:border-amber-500 text-xs text-[var(--text-primary)] focus:outline-none transition-colors font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowDeepseek(!showDeepseek)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-1"
+                      >
+                        {showDeepseek ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Groq API Key */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[var(--text-primary)] flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Mic size={13} className="text-amber-400" />
+                        Groq API Key (Whisper STT)
+                      </span>
+                      <span className="text-[10px] text-[var(--text-muted)] font-normal">Obrigatório p/ Voz</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showGroq ? "text" : "password"}
+                        value={groqApiKey}
+                        onChange={(e) => setGroqApiKey(e.target.value)}
+                        placeholder="gsk_..."
+                        className="w-full px-3 py-2 pr-10 rounded-xl bg-black/40 border border-[var(--border-subtle)] focus:border-amber-500 text-xs text-[var(--text-primary)] focus:outline-none transition-colors font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowGroq(!showGroq)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors p-1"
+                      >
+                        {showGroq ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-[var(--text-muted)] leading-relaxed pt-1">
+                    As chaves são salvas localmente no seu banco SQLite seguro e possuem precedência total sobre o arquivo .env.
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
+            {step === 5 && (
+              <motion.div
+                key="step5"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-4 flex-1 flex flex-col justify-center"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 uppercase tracking-wider">
                     <Keyboard size={13} />
-                    <span>Passo 4 de 4 — Atalho de Invocação</span>
+                    <span>Passo 5 de 5 — Atalho de Invocação</span>
                   </div>
                   <h3 className="text-lg font-bold text-[var(--text-primary)]">
                     Como você deseja abrir o Copernico?
                   </h3>
                   <p className="text-xs text-[var(--text-muted)]">
-                    Defina a combinação de teclas global para abrir ou alternar o Copernico sobre qualquer janela do Windows.
+                    Defina a combinação de teclas global para abrir ou alternar o Copernico sobre qualquer janela.
                   </p>
                 </div>
 
@@ -585,7 +693,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
               <div />
             )}
 
-            {step < 4 ? (
+            {step < 5 ? (
               <button
                 type="button"
                 disabled={step === 1 && !name.trim()}

@@ -1,6 +1,7 @@
 use crate::agent::AgentCore;
 use crate::db::Database;
 use crate::plugin_registry::PluginRegistry;
+use crate::services::kanban_srv::KanbanService;
 use chrono::{Datelike, Local, Timelike};
 use serde_json::json;
 use std::collections::HashMap;
@@ -18,6 +19,8 @@ pub struct SkillRunner {
     last_runs: Arc<RwLock<HashMap<String, chrono::DateTime<Local>>>>,
     running_ids: Arc<RwLock<std::collections::HashSet<String>>>,
     skills_path: Arc<RwLock<Option<std::path::PathBuf>>>,
+    /// Fase 3: fechamento automático de semanas vencidas no tick do scheduler.
+    kanban: Arc<RwLock<Option<Arc<KanbanService>>>>,
 }
 
 impl SkillRunner {
@@ -31,6 +34,14 @@ impl SkillRunner {
             last_runs: Arc::new(RwLock::new(HashMap::new())),
             running_ids: Arc::new(RwLock::new(std::collections::HashSet::new())),
             skills_path: Arc::new(RwLock::new(None)),
+            kanban: Arc::new(RwLock::new(None)),
+        }
+    }
+
+    /// Anexa o serviço kanban ao scheduler (chamado no setup do Tauri).
+    pub fn set_kanban_service(&self, kanban: Arc<KanbanService>) {
+        if let Ok(mut guard) = self.kanban.write() {
+            *guard = Some(kanban);
         }
     }
 
@@ -101,6 +112,51 @@ impl SkillRunner {
                             Err(e) => eprintln!("[INBOX] Falha na purga de dismissed: {}", e),
                         }
                         last_prune = std::time::Instant::now();
+                    }
+
+                    // Fase 3 — Kanban: fecha semanas vencidas (domingo 23h) mesmo
+                    // com o app parado; pendências viram itens `kanban_rollover`.
+                    if let Ok(kanban_guard) = self.kanban.read() {
+                        if let Some(kanban) = kanban_guard.as_ref() {
+                            match kanban.ensure_weeks_closed() {
+                                Ok(closed) if !closed.is_empty() => {
+                                    println!("[KANBAN] Semana(s) fechada(s) por vencimento: {}.", closed.join(", "));
+                                    if let Ok(app_guard) = self.app_handle.read() {
+                                        if let Some(app) = app_guard.as_ref() {
+                                            for week_id in &closed {
+                                                let _ = crate::bridge::emitter::emit_kanban_changed(
+                                                    app, week_id, "week_closed",
+                                                );
+                                            }
+                                            let unread = self.db.get_unread_inbox_count().ok();
+                                            let _ = crate::bridge::emitter::emit_inbox_updated(app, unread);
+                                        }
+                                    }
+                                }
+                                Ok(_) => {}
+                                Err(e) => eprintln!("[KANBAN] Falha ao verificar fechamento de semanas: {}", e),
+                            }
+
+                            // Fase 4 — Hábitos: gera as tarefas de hoje (idempotente;
+                            // hoje = dia da semana atual). Pula se a semana atual está
+                            // fechada (domingo após 23h — sem geração até segunda).
+                            match kanban.habit().sync_habit_tasks_today() {
+                                Ok(n) if n > 0 => {
+                                    println!("[HABITOS] {} tarefa(s) de hábito criada(s) para hoje.", n);
+                                    if let Ok(week_id) = kanban.current_week_id() {
+                                        if let Ok(app_guard) = self.app_handle.read() {
+                                            if let Some(app) = app_guard.as_ref() {
+                                                let _ = crate::bridge::emitter::emit_kanban_changed(
+                                                    app, &week_id, "habits_synced",
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
+                                Ok(_) => {}
+                                Err(e) => eprintln!("[HABITOS] Falha ao sincronizar tarefas de hábito: {}", e),
+                            }
+                        }
                     }
 
                     // Verifica todas as skills registradas
@@ -640,7 +696,7 @@ impl SkillRunner {
     }
 
     pub fn validate_cron(expr: &str) -> Result<(), String> {
-        let parts: Vec<&str> = expr.trim().split_whitespace().collect();
+        let parts: Vec<&str> = expr.split_whitespace().collect();
         if parts.len() != 5 {
             return Err(
                 "Expressão cron deve conter exatamente 5 campos (min hora dia mês dia_semana)"
@@ -703,11 +759,7 @@ impl SkillRunner {
                         .parse()
                         .map_err(|_| format!("Valor inválido '{}' no campo {}", e, idx + 1))?;
                     let (min, max) = ranges[idx];
-                    if s_val < min as i32
-                        || s_val > max as i32
-                        || e_val < min as i32
-                        || e_val > max as i32
-                    {
+                    if s_val < min || s_val > max || e_val < min || e_val > max {
                         return Err(format!(
                             "Valores fora do intervalo {}-{} no campo {}: '{}'",
                             min,
@@ -725,7 +777,7 @@ impl SkillRunner {
                         .map_err(|_| format!("Valor inválido '{}' no campo {}", base, idx + 1))?;
                     let (min, max) = ranges[idx];
                     // Para dia da semana, 7 é alias para 0, permite 0-7
-                    if v < min as i32 || v > max as i32 {
+                    if v < min || v > max {
                         return Err(format!(
                             "Valor fora do intervalo {}-{} no campo {}: '{}'",
                             min,

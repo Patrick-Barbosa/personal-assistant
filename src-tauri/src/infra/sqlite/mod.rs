@@ -1,11 +1,17 @@
+pub mod habit_repo;
 pub mod inbox_repo;
+pub mod kanban_repo;
+pub mod migrations;
 pub mod plugin_repo;
 pub mod pool;
 pub mod session_repo;
 pub mod settings_repo;
 pub mod vault_index_repo;
 
+pub use habit_repo::*;
 pub use inbox_repo::*;
+pub use kanban_repo::*;
+pub use migrations::*;
 pub use plugin_repo::*;
 pub use pool::*;
 pub use session_repo::*;
