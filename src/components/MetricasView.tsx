@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Flame, Shield } from "lucide-react";
 import { addDays, format, parseISO } from "date-fns";
 import { api } from "../api";
@@ -124,6 +125,19 @@ export default function MetricasView() {
       <p className="text-center text-xs tabular-nums text-[#141414]/40">
         Média {m.geral.media_pct}% · {m.geral.cheios} hábito(s) 7/7 · Tarefas {m.tarefas.concluidas}/{m.tarefas.criadas} · {m.notas.total} notas
       </p>
+
+      <section className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-5">
+        <h2 className="flim-nav mb-2 font-bold text-[#141414]">Evolução (hábitos feitos/dia)</h2>
+        <ResponsiveContainer width="100%" height={160}>
+          <LineChart data={m.serie}>
+            <CartesianGrid stroke="#d9d9d9" strokeDasharray="3 3" />
+            <XAxis dataKey="data" tick={{ fill: "#141414", fontSize: 11 }} />
+            <YAxis allowDecimals={false} tick={{ fill: "#141414", fontSize: 11 }} />
+            <Tooltip />
+            <Line type="monotone" dataKey="feitos" stroke="#141414" strokeWidth={2} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </section>
 
       <section className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-5">
         <div className="mb-2 flex items-center gap-2">
