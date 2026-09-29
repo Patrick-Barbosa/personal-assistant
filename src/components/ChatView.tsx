@@ -43,10 +43,13 @@ export default function ChatView({ sessionId }: Props) {
     setDraft("");
     setSending(true);
     setError("");
+    const tempId = -Date.now();
+    setMessages((m) => [...m, { id: tempId, session_id: sessionId, role: "user", content, created_at: new Date().toISOString() }]);
     try {
       const res = await api.sendChat(sessionId, content);
-      setMessages((m) => [...m, res.user_message, res.assistant_message]);
+      setMessages((m) => [...m.filter((x) => x.id !== tempId), res.user_message, res.assistant_message]);
     } catch (e) {
+      setMessages((m) => m.filter((x) => x.id !== tempId));
       setError(String(e instanceof Error ? e.message : e));
     } finally {
       setSending(false);
@@ -99,7 +102,15 @@ export default function ChatView({ sessionId }: Props) {
               {m.created_at && <span className="mt-1 text-[11px] text-[#141414]/50">{timeOf(m.created_at)}</span>}
             </div>
           ))}
-          {sending && <p className="flim-nav text-[#141414]/50">Pensando…</p>}
+          {sending && (
+            <div className="flex flex-col items-start">
+              <div className="flex items-center gap-1.5 rounded-[16px] border border-[#141414]/25 bg-[#ffffff] px-4 py-3.5">
+                <span className="typing-dot" />
+                <span className="typing-dot" />
+                <span className="typing-dot" />
+              </div>
+            </div>
+          )}
           <div ref={bottomRef} />
         </div>
       </div>

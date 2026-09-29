@@ -50,15 +50,13 @@ function Card({ task, showDay, onChanged, onOpen }: { task: Task; showDay: boole
       style={transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined}
       className={`rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3 ${isDragging ? "opacity-50" : ""}`}
     >
-      <div className="mb-1 flex items-center gap-2">
-        <button
-          {...listeners}
-          {...attributes}
-          className="cursor-grab touch-none rounded px-1 text-xs text-[#141414]/40 hover:text-[#141414]"
-          title="Arrastar"
-        >
-          ⠿
-        </button>
+      <div
+        {...listeners}
+        {...attributes}
+        className="mb-1 flex cursor-grab touch-none items-center gap-2 rounded-[6px] px-1 py-0.5 active:cursor-grabbing"
+        title="Arraste para mover entre Backlog, dias e Feito"
+      >
+        <span className="text-xs text-[#141414]/40">⠿</span>
         {task.categoria && (
           <span className="flex items-center gap-1 rounded-full bg-[#f5f5f5] px-2 py-0.5 text-[11px] font-semibold text-[#141414]" title={categoryLabel(task.categoria)}>
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: categoryColor(task.categoria) }} />
@@ -137,6 +135,7 @@ export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
   const [draft, setDraft] = useState("");
   const [selected, setSelected] = useState<Task | null>(null);
   const [filter, setFilter] = useState("");
+  const [dropError, setDropError] = useState("");
 
   const groups = useMemo(() => {
     const match = (t: Task) => !filter || (t.categoria ?? "") === filter;
@@ -190,8 +189,13 @@ export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
       if (dest) destIndex = groups[dest].findIndex((t) => t.id === overId);
     }
     if (!dest) return;
-    await api.placeTask(activeId, dest, destIndex);
-    refresh();
+    setDropError("");
+    try {
+      await api.placeTask(activeId, dest, destIndex);
+      refresh();
+    } catch (e) {
+      setDropError(`Não moveu: ${e instanceof Error ? e.message : e}. Reinicie o backend: python3 -m backend.server`);
+    }
   }
 
   return (
@@ -206,8 +210,9 @@ export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
         </button>
       </div>
       <p className="mb-3 text-sm text-[#141414]/60">
-        A IA preenche o <strong>Backlog</strong>. Você arrasta para os dias.
+        A IA preenche o <strong>Backlog</strong>. Arraste pela faixa ⠿ para os dias.
       </p>
+      {dropError && <p className="mb-2 text-sm text-red-600">{dropError}</p>}
       {usedCats.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-1">
           <button
