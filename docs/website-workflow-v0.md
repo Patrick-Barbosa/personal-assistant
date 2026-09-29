@@ -42,12 +42,13 @@ Chat crosses all. Task detail is child of Semana/Hoje.
 - Weekly review: Métricas -> see misses -> feeds next plan.
 
 ## 7. Metrics defaults (v0 standard)
-- Per habit: completion % (done days / 7), current streak.
+- Per habit: completion % (done days / 7), current streak (full history, not week-bounded).
 - Overall: avg habit %, habits fully done count.
 - Tasks: created, completed, carried over, completion %.
 - Notes: notes written count.
 - AI summary: 3 bullets (wins, misses, focus next week).
-- Configurable later: habit target/week, week start day, numeric goals.
+- Gamification (no XP): "Hoje em risco" hero (active streaks + what's missing today), Seg–Dom dots grid per habit, milestone badges at 7/30/100 days, shields: every 3-day streak crossing earns 1 (max 2 stored); 1 shield auto-covers one missed day for all habits, % stays honest.
+- Configurable later: habit target/week, numeric goals. Week starts Monday (fixed).
 
 ## 8. Linking plan
 - Task <-> its .md note (1:1).

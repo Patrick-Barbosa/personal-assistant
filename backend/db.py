@@ -47,6 +47,8 @@ def _migrate_tasks(conn) -> None:
     _ensure_column(conn, "tasks", "categoria", "TEXT NOT NULL DEFAULT ''")
     _ensure_column(conn, "habits", "meta", "REAL NOT NULL DEFAULT 0")
     _ensure_column(conn, "habits", "dias", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "habits", "escudo_marco", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(conn, "habit_checks", "protegido", "INTEGER NOT NULL DEFAULT 0")
     if _ensure_column(conn, "habit_checks", "feito", "INTEGER NOT NULL DEFAULT 0"):
         conn.execute("UPDATE habit_checks SET feito = CASE WHEN valor > 0 THEN 1 ELSE 0 END")
 
@@ -54,8 +56,8 @@ def _migrate_tasks(conn) -> None:
 def _seed_categories(conn) -> None:
     conn.execute("CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY, nome TEXT NOT NULL, cor TEXT NOT NULL DEFAULT '#141414')")
     if conn.execute("SELECT COUNT(*) AS c FROM categories").fetchone()["c"] == 0:
-        presets = [("trabalho", "Trabalho", "#141414"), ("estudo", "Estudo", "#30a81d"), ("pessoal", "Pessoal", "#ff8400"),
-                   ("saude", "Saúde", "#21935b"), ("ideia", "Ideia", "#fecc33")]
+        presets = [("trabalho", "Trabalho", "#141414"), ("estudo", "Estudo", "#5c5c5c"), ("pessoal", "Pessoal", "#ff8400"),
+                   ("saude", "Saúde", "#8a8a8a"), ("ideia", "Ideia", "#fecc33"), ("habitos", "Hábitos", "#141414")]
         for cid, nome, cor in presets:
             conn.execute("INSERT OR IGNORE INTO categories (id, nome, cor) VALUES (?, ?, ?)", (cid, nome, cor))
 
@@ -70,7 +72,7 @@ def _migrate_habits_legacy(conn) -> None:
     conn.execute(
         "CREATE TABLE habits (id TEXT PRIMARY KEY, nome TEXT NOT NULL, "
         "tipo TEXT NOT NULL DEFAULT 'binary', unidade TEXT NOT NULL DEFAULT '', "
-        "meta REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL)"
+        "meta REAL NOT NULL DEFAULT 0, dias TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL)"
     )
     for r in rows:
         keys = r.keys()

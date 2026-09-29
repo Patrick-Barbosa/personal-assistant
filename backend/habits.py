@@ -9,6 +9,8 @@ MAX_HABITS = 10
 TIPOS = ("binary", "numeric")
 DATA_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
+HABIT_CATEGORY = "habitos"  # categoria fixa de todo hábito; o usuário não edita
+
 
 def today_str() -> str:
     return datetime.now().strftime("%Y-%m-%d")
@@ -130,6 +132,58 @@ def update_habit(conn, habit_id: str, patch: dict) -> dict:
     return habit_to_dict(conn.execute("SELECT * FROM habits WHERE id = ?", (habit_id,)).fetchone(), data.get(habit_id, 0))
 
 
+def get_escudos(conn) -> int:
+    r = conn.execute("SELECT value FROM settings WHERE key = 'escudos'").fetchone()
+    try:
+        return max(0, min(2, int(r["value"] if r else 0)))
+    except (TypeError, ValueError):
+        return 0
+
+
+def set_escudos(conn, n: int) -> int:
+    n = max(0, min(2, int(n)))
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES ('escudos', ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (str(n),),
+    )
+    conn.commit()
+    return n
+
+
+def streak_of(conn, habit_id: str, ref: str = "") -> int:
+    """Streak até ref/today contando feito + dias protegidos. Limitado a 400 dias."""
+    from datetime import timedelta
+
+    d = datetime.strptime(_check_data(ref), "%Y-%m-%d").date()
+    n = 0
+    for _ in range(400):
+        r = conn.execute("SELECT feito, protegido FROM habit_checks WHERE habit_id = ? AND data = ?", (habit_id, d.isoformat())).fetchone()
+        if not r:
+            break
+        keys = r.keys()
+        if (r["feito"] or 0) or ("protegido" in keys and (r["protegido"] or 0)):
+            n += 1
+            d -= timedelta(days=1)
+        else:
+            break
+    return n
+
+
+def spend_shield(conn, habit_id: str, data: str) -> bool:
+    """Gasta 1 escudo marcando o dia como protegido. False sem estoque."""
+    if get_escudos(conn) <= 0:
+        return False
+    conn.execute(
+        "INSERT INTO habit_checks (habit_id, data, valor, feito, protegido) VALUES (?, ?, 0, 0, 1) "
+        "ON CONFLICT(habit_id, data) DO UPDATE SET protegido = 1",
+        (habit_id, data),
+    )
+    set_escudos(conn, get_escudos(conn) - 1)
+    conn.commit()
+    return True
+
+
 def habits_today(conn) -> dict[str, float]:
     rows = conn.execute("SELECT habit_id, valor FROM habit_checks WHERE data = ?", (today_str(),)).fetchall()
     return {r["habit_id"]: r["valor"] for r in rows}
@@ -173,6 +227,16 @@ def set_check(conn, habit_id: str, data: str, patch) -> dict:
         (habit_id, data, valor, feito),
     )
     conn.commit()
+    escudo_ganho = False
+    if feito:
+        s = streak_of(conn, habit_id, data)
+        marco = row["escudo_marco"] if "escudo_marco" in row.keys() else 0
+        if s // 3 > (marco or 0) // 3:
+            if get_escudos(conn) < 2:
+                set_escudos(conn, get_escudos(conn) + 1)
+                escudo_ganho = True
+            conn.execute("UPDATE habits SET escudo_marco = ? WHERE id = ?", (s, habit_id))
+            conn.commit()
     if "feito" in patch:
         from . import kanban
 
@@ -182,7 +246,9 @@ def set_check(conn, habit_id: str, data: str, patch) -> dict:
                 kanban.move_task(conn, link["task_id"], "done" if feito else "doing", 999)
             except (ValueError, LookupError):
                 pass
-    return habit_to_dict(row, valor, feito)
+    out = habit_to_dict(row, valor, feito)
+    out["escudo_ganho"] = escudo_ganho
+    return out
 
 
 def weekday_label(data: str) -> str:
@@ -203,6 +269,7 @@ def ensure_habit_tasks(conn, data: str = "") -> int:
     from . import kanban
 
     conn.execute("CREATE TABLE IF NOT EXISTS habit_tasks (habit_id TEXT NOT NULL, data TEXT NOT NULL, task_id TEXT NOT NULL, PRIMARY KEY (habit_id, data))")
+    conn.execute("INSERT OR IGNORE INTO categories (id, nome, cor) VALUES (?, 'Hábitos', '#141414')", (HABIT_CATEGORY,))
     created = 0
     for day in week_days(data):
         label = weekday_label(day)
@@ -212,10 +279,15 @@ def ensure_habit_tasks(conn, data: str = "") -> int:
             if ativos and label not in ativos:
                 continue
             link = conn.execute("SELECT task_id FROM habit_tasks WHERE habit_id = ? AND data = ?", (h["id"], day)).fetchone()
-            if link and conn.execute("SELECT 1 FROM tasks WHERE id = ?", (link["task_id"],)).fetchone():
-                continue
+            if link:
+                t = conn.execute("SELECT categoria FROM tasks WHERE id = ?", (link["task_id"],)).fetchone()
+                if t is not None:
+                    if (t["categoria"] or "") != HABIT_CATEGORY:
+                        conn.execute("UPDATE tasks SET categoria = ?, updated_at = ? WHERE id = ?", (HABIT_CATEGORY, now_iso(), link["task_id"]))
+                        conn.commit()
+                    continue
             t = kanban.create_task(conn, h["nome"], "doing")
-            conn.execute("UPDATE tasks SET day_label = ?, habit_id = ? WHERE id = ?", (label, h["id"], t["id"]))
+            conn.execute("UPDATE tasks SET day_label = ?, habit_id = ?, categoria = ? WHERE id = ?", (label, h["id"], HABIT_CATEGORY, t["id"]))
             conn.execute("INSERT OR REPLACE INTO habit_tasks (habit_id, data, task_id) VALUES (?, ?, ?)", (h["id"], day, t["id"]))
             conn.commit()
             created += 1

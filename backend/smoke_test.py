@@ -30,7 +30,7 @@ def req(method: str, path: str, body=None):
 
 
 def main() -> int:
-    tmp = Path(tempfile.mkdtemp(prefix="copernico-smoke-"))
+    tmp = Path(tempfile.mkdtemp(prefix="tiba-smoke-"))
     env = dict(os.environ, BACKEND_PORT=PORT, DB_PATH=str(tmp / "cache.db"))
     proc = subprocess.Popen([sys.executable, "-m", "backend.server"], cwd=ROOT, env=env,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -105,8 +105,40 @@ def main() -> int:
         check("check-fills-meta", s == 200 and chkn["valor"] == 30 and chkn["feito"] == 1, str(chkn)[:80])
         s, chkn = req("POST", f"/api/habits/{hn['id']}/check", {"feito": 0})
         check("uncheck-zeroes", s == 200 and chkn["valor"] == 0 and chkn["feito"] == 0, str(chkn)[:80])
+        s, hs = req("POST", "/api/habits", {"nome": "Shield", "tipo": "binary", "dias": ""})
+        import datetime as _dt
+        _today = _dt.date.today()
+        _gain = None
+        for _n in (2, 1, 0):
+            _d = (_today - _dt.timedelta(days=_n)).isoformat()
+            s, _chk = req("POST", f"/api/habits/{hs['id']}/check", {"data": _d, "feito": 1})
+            _gain = _chk.get("escudo_ganho")
+        check("shield-grant", _gain is True, f"ganho={_gain}")
+        s, met2 = req("GET", "/api/metricas")
+        _mine = [x for x in met2["habitos"] if x["id"] == hs["id"]][0]
+        check("shield-streak", s == 200 and _mine["streak"] == 3 and met2["escudos"] == 1, str((_mine["streak"], met2["escudos"])))
+        s, _ = req("DELETE", f"/api/habits/{hs['id']}")
+        check("shield-cleanup", s == 200)
         s, _ = req("DELETE", f"/api/habits/{hn['id']}")
         check("check-fills-meta-cleanup", s == 200)
+        s, hc = req("POST", "/api/habits", {"nome": "CatHab", "tipo": "binary", "dias": ""})
+        check("create-habit-fixed", s == 201 and "categoria" not in hc, str(hc)[:80])
+        s, _ = req("GET", "/api/hoje")
+        check("hoje-ensure", s == 200)
+        s, board = req("GET", "/api/board")
+        linked = [t for t in board["doing"] if t.get("habit_id") == hc["id"]]
+        check("habit-task-cat", s == 200 and len(linked) >= 1 and all(t.get("categoria") == "habitos" for t in linked), f"n={len(linked) if s == 200 else '?'}")
+        s, cats = req("GET", "/api/categorias")
+        check("habitos-seeded", s == 200 and any(c["id"] == "habitos" for c in cats), f"n={len(cats) if s == 200 else '?'}")
+        s, _ = req("DELETE", "/api/categorias/habitos")
+        check("habitos-delete", s == 200)
+        s, _ = req("GET", "/api/hoje")
+        s, cats = req("GET", "/api/categorias")
+        check("habitos-reseed", s == 200 and any(c["id"] == "habitos" for c in cats))
+        for t in linked:
+            req("DELETE", f"/api/tasks/{t['id']}")
+        s, _ = req("DELETE", f"/api/habits/{hc['id']}")
+        check("habit-cat-cleanup", s == 200)
         s, _ = req("DELETE", f"/api/tasks/{tid}")
         check("delete-task", s == 200)
         s, _ = req("DELETE", f"/api/sessions/{sid}")

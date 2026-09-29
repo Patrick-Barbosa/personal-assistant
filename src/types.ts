@@ -54,10 +54,11 @@ export interface Category {
 
 export const CATEGORIES = [
   { id: "trabalho", label: "Trabalho", color: "#141414" },
-  { id: "estudo", label: "Estudo", color: "#30a81d" },
+  { id: "estudo", label: "Estudo", color: "#5c5c5c" },
   { id: "pessoal", label: "Pessoal", color: "#ff8400" },
-  { id: "saude", label: "Saúde", color: "#21935b" },
+  { id: "saude", label: "Saúde", color: "#8a8a8a" },
   { id: "ideia", label: "Ideia", color: "#fecc33" },
+  { id: "habitos", label: "Hábitos", color: "#141414" },
 ] as const;
 
 export function categoryColor(cat: string, cats?: Category[]): string {
@@ -72,7 +73,7 @@ export function categoryLabel(cat: string, cats?: Category[]): string {
   return CATEGORIES.find((c) => c.id === cat)?.label ?? cat;
 }
 
-export const CATEGORY_COLORS = ["#141414", "#30a81d", "#21935b", "#ff8400", "#fecc33", "#8a8a8a"];
+export const CATEGORY_COLORS = ["#141414", "#5c5c5c", "#8a8a8a", "#ff8400", "#fecc33", "#d9d9d9"];
 
 export interface Habit {
   id: string;
@@ -83,6 +84,7 @@ export interface Habit {
   dias: string;
   valor: number;
   feito: number;
+  escudo_ganho?: boolean;
   created_at: string;
 }
 
@@ -108,6 +110,9 @@ export interface MetricaHabito {
   pct: number;
   streak: number;
   done_days: number;
+  dias: boolean[];
+  marco: number | null;
+  protegidas: string[];
 }
 
 export interface Metricas {
@@ -118,6 +123,8 @@ export interface Metricas {
   tarefas: { criadas: number; concluidas: number; carregadas: number; pct: number };
   notas: { total: number; diarias: number; tarefas: number };
   resumo: string | null;
+  escudos: number;
+  hoje_pendente: { id: string; nome: string; streak: number }[];
 }
 
 export interface NotaTarefa {

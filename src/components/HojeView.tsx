@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Checkbox } from "@base-ui/react/checkbox";
+import { Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { format } from "date-fns";
 import { api } from "../api";
-import { DAY_LABELS, type Habit, type Hoje } from "../types";
+import { DAY_LABELS, categoryColor, categoryLabel, type Category, type Habit, type Hoje } from "../types";
 
 function DayPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const active = value ? value.split(",") : [];
@@ -30,7 +31,7 @@ function DayPicker({ value, onChange }: { value: string; onChange: (v: string) =
   );
 }
 
-function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onChanged: () => void }) {
+function HabitRow({ habit, data, onChanged, onShield }: { habit: Habit; data: string; onChanged: () => void; onShield: () => void }) {
   const [valor, setValor] = useState(String(habit.valor ?? 0));
   const [editingDays, setEditingDays] = useState(false);
   const [editingUnit, setEditingUnit] = useState(false);
@@ -44,14 +45,16 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
   }, [habit.valor, habit.unidade, habit.meta]);
 
   async function toggleFeito() {
-    await api.checkHabit(habit.id, { feito: habit.feito ? 0 : 1 }, data);
+    const r = await api.checkHabit(habit.id, { feito: habit.feito ? 0 : 1 }, data);
+    if (r.escudo_ganho) onShield();
     onChanged();
   }
 
   async function commitValor() {
     const v = Number(valor);
     if (Number.isNaN(v) || v < 0 || v === habit.valor) return;
-    await api.checkHabit(habit.id, { valor: v }, data);
+    const r = await api.checkHabit(habit.id, { valor: v }, data);
+    if (r.escudo_ganho) onShield();
     onChanged();
   }
 
@@ -82,14 +85,14 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
           checked={!!habit.feito}
           onCheckedChange={() => toggleFeito()}
           aria-label={`Marcar ${habit.nome} como feito`}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] border border-[#141414] bg-[#ffffff] outline-none data-[checked]:bg-[#30a81d] data-[checked]:text-[#ffffff]"
+          className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-[8px] border bg-[#ffffff] outline-none transition-all duration-150 active:scale-95 data-[checked]:border-[#141414] data-[checked]:bg-[#141414] data-[checked]:text-[#ffffff] data-[unchecked]:border-[#141414]/30 data-[unchecked]:text-transparent hover:data-[unchecked]:border-[#141414] hover:data-[unchecked]:text-[#141414]/30"
         >
-          <Checkbox.Indicator className="text-sm data-[unchecked]:hidden">
-            ✓
+          <Checkbox.Indicator className="flex items-center justify-center data-[unchecked]:hidden">
+            <Check size={15} strokeWidth={3.5} aria-hidden="true" />
           </Checkbox.Indicator>
         </Checkbox.Root>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-[#141414]">{habit.nome}</p>
+          <p className={`truncate text-sm font-semibold ${habit.feito ? "text-[#141414]/45 line-through" : "text-[#141414]"}`}>{habit.nome}</p>
           <p className="text-[11px] text-[#141414]/50">
             {diasLabel}
             {habit.tipo === "numeric" && habit.meta > 0 && ` · meta ${habit.meta}${habit.unidade ? ` ${habit.unidade}` : ""}`}
@@ -133,7 +136,7 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
       </div>
       {habit.tipo === "numeric" && habit.meta > 0 && (
         <div className="ml-9 mt-1.5 h-1.5 overflow-hidden rounded bg-[#e9e9e9]" title={`${habit.valor}/${habit.meta} (${progress}%)`}>
-          <div className="h-full rounded bg-[#30a81d] transition-all" style={{ width: `${progress}%` }} />
+          <div className="h-full rounded bg-[#141414] transition-all" style={{ width: `${progress}%` }} />
         </div>
       )}
       <div className="ml-9 mt-1.5">
@@ -169,14 +172,24 @@ export default function HojeView({ onTasksChanged }: { onTasksChanged?: () => vo
   const [unidade, setUnidade] = useState("");
   const [meta, setMeta] = useState("");
   const [dias, setDias] = useState("");
+  const [cats, setCats] = useState<Category[]>([]);
   const [nota, setNota] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [error, setError] = useState("");
+  const [shieldMsg, setShieldMsg] = useState(false);
+  const shieldTimer = useRef<number | null>(null);
+
+  function notifyShield() {
+    setShieldMsg(true);
+    if (shieldTimer.current) window.clearTimeout(shieldTimer.current);
+    shieldTimer.current = window.setTimeout(() => setShieldMsg(false), 4000);
+  }
 
   const load = useCallback(async () => {
     const h = await api.getHoje(today);
     setHoje(h);
     setNota(h.nota?.conteudo ?? "");
+    api.listCategorias().then(setCats).catch(() => {});
   }, [today]);
 
   useEffect(() => {
@@ -234,7 +247,7 @@ export default function HojeView({ onTasksChanged }: { onTasksChanged?: () => vo
         <h2 className="flim-nav mb-2 font-bold text-[#141414]">Hábitos ({hoje?.habits.length ?? 0}/10)</h2>
         <div className="space-y-2">
           {hoje?.habits.map((h) => (
-            <HabitRow key={h.id} habit={h} data={today} onChanged={load} />
+            <HabitRow key={h.id} habit={h} data={today} onChanged={load} onShield={notifyShield} />
           ))}
           {(hoje?.habits.length ?? 0) === 0 && (
             <p className="text-sm text-[#141414]/50">Nenhum hábito ainda. Crie até 10 abaixo.</p>
@@ -296,8 +309,11 @@ export default function HojeView({ onTasksChanged }: { onTasksChanged?: () => vo
         <h2 className="flim-nav mb-2 font-bold text-[#141414]">Na semana ({hoje?.doing.length ?? 0})</h2>
         <div className="space-y-1">
           {(hoje?.doing ?? []).map((t) => (
-            <p key={t.id} className="truncate rounded-[8px] bg-[#f5f5f5] px-3 py-1.5 text-sm text-[#141414]">
-              {t.day_label ? `[${t.day_label}] ` : ""}{t.titulo}
+            <p key={t.id} className="flex items-center gap-2 truncate rounded-[8px] bg-[#f5f5f5] px-3 py-1.5 text-sm text-[#141414]">
+              {t.categoria && (
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: categoryColor(t.categoria, cats) }} title={categoryLabel(t.categoria, cats)} />
+              )}
+              <span className="truncate">{t.day_label ? `[${t.day_label}] ` : ""}{t.titulo}</span>
             </p>
           ))}
           {(hoje?.doing.length ?? 0) === 0 && <p className="text-sm text-[#141414]/50">Nada em doing. Arraste na Semana.</p>}
@@ -334,6 +350,11 @@ export default function HojeView({ onTasksChanged }: { onTasksChanged?: () => vo
         </div>
       </section>
 
+      {shieldMsg && (
+        <p className="rounded-[16px] border border-[#141414] bg-[#fecc33] px-4 py-2 text-sm font-bold text-[#141414]">
+          Escudo ganho! Ele protege sozinho seu próximo dia vazio (máx. 2 guardados).
+        </p>
+      )}
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );

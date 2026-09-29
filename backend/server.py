@@ -1,4 +1,4 @@
-"""Copernico web backend — stdlib only (http.server + sqlite3 + urllib).
+"""Tiba web backend — stdlib only (http.server + sqlite3 + urllib).
 
 Beginner version: chat sessions + flat kanban board. No vault, no voice, no search.
 
@@ -105,7 +105,7 @@ def suggest_categories(conn) -> list[dict]:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "CopernicoWeb/0.2"
+    server_version = "TibaWeb/0.3"
 
     def log_message(self, *args) -> None:
         pass
@@ -341,7 +341,7 @@ def main() -> None:
     db.init_db()
     port = config.BACKEND_PORT
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"[backend] Copernico web em http://127.0.0.1:{port} (db={config.DB_PATH})")
+    print(f"[backend] Tiba web em http://127.0.0.1:{port} (db={config.DB_PATH})")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

@@ -43,19 +43,32 @@ def get_metricas(conn, data: str = "") -> dict:
         dm = _done_map(conn, h["id"], days)
         done_days = sum(1 for d in days if habits.cumprido(h["tipo"], dm.get(d, (0, 0))[0], hmeta, dm.get(d, (0, 0))[1]))
         pct = round(done_days / 7 * 100)
+        dias = [bool(habits.cumprido(h["tipo"], dm.get(d, (0, 0))[0], hmeta, dm.get(d, (0, 0))[1])) for d in days]
         streak = 0
         d = datetime.strptime(anchor, "%Y-%m-%d").date()
-        while True:
+        for _ in range(400):
             key = d.isoformat()
-            if key < days[0]:
-                break
-            r = conn.execute("SELECT valor, feito FROM habit_checks WHERE habit_id = ? AND data = ?", (h["id"], key)).fetchone()
-            if r and habits.cumprido(h["tipo"], r["valor"], hmeta, r["feito"] if "feito" in r.keys() else None):
+            r = conn.execute("SELECT valor, feito, protegido FROM habit_checks WHERE habit_id = ? AND data = ?", (h["id"], key)).fetchone()
+            rkeys = r.keys() if r else []
+            feito = r["feito"] if r and "feito" in rkeys else 0
+            prot = r["protegido"] if r and "protegido" in rkeys else 0
+            if r and (feito or prot):
                 streak += 1
                 d -= timedelta(days=1)
-            else:
-                break
-        habitos.append({"id": h["id"], "nome": h["nome"], "tipo": h["tipo"], "unidade": h["unidade"], "meta": hmeta, "pct": pct, "streak": streak, "done_days": done_days})
+                continue
+            if key >= days[0] and conn.execute(
+                "SELECT 1 FROM habit_checks WHERE habit_id = ? AND data < ? AND feito = 1 LIMIT 1", (h["id"], key)
+            ).fetchone():
+                if habits.spend_shield(conn, h["id"], key):
+                    streak += 1
+                    d -= timedelta(days=1)
+                    continue
+            break
+        protegidas = [r["data"] for r in conn.execute(
+            "SELECT data FROM habit_checks WHERE habit_id = ? AND protegido = 1 AND data BETWEEN ? AND ?", (h["id"], days[0], days[-1])
+        ).fetchall()]
+        marco = streak if streak in (7, 30, 100, 365) else None
+        habitos.append({"id": h["id"], "nome": h["nome"], "tipo": h["tipo"], "unidade": h["unidade"], "meta": hmeta, "pct": pct, "streak": streak, "done_days": done_days, "dias": dias, "marco": marco, "protegidas": protegidas})
 
     media = round(sum(h["pct"] for h in habitos) / len(habitos)) if habitos else 0
     cheios = sum(1 for h in habitos if h["done_days"] == 7)
@@ -69,6 +82,12 @@ def get_metricas(conn, data: str = "") -> dict:
     daily = conn.execute("SELECT COUNT(*) AS c FROM daily_notes WHERE data BETWEEN ? AND ?", (ini, fim)).fetchone()["c"]
     tnotes = conn.execute("SELECT COUNT(*) AS c FROM tasks WHERE note_md IS NOT NULL AND note_md != '' AND substr(updated_at, 1, 10) BETWEEN ? AND ?", (ini, fim)).fetchone()["c"]
 
+    pendente = []
+    for h in habitos:
+        r = conn.execute("SELECT feito FROM habit_checks WHERE habit_id = ? AND data = ?", (h["id"], today)).fetchone()
+        if not r or not r["feito"]:
+            pendente.append({"id": h["id"], "nome": h["nome"], "streak": h["streak"]})
+
     return {
         "semana": {"inicio": ini, "fim": fim},
         "habitos": habitos,
@@ -77,6 +96,8 @@ def get_metricas(conn, data: str = "") -> dict:
         "tarefas": {"criadas": criadas, "concluidas": concluidas, "carregadas": carregadas, "pct": pct_task},
         "notas": {"total": daily + tnotes, "diarias": daily, "tarefas": tnotes},
         "resumo": None,
+        "escudos": habits.get_escudos(conn),
+        "hoje_pendente": pendente,
     }
 
 

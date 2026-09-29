@@ -1,4 +1,4 @@
--- Copernico beginner schema: chat sessions + flat kanban tasks. No weeks, no vault index.
+-- Tiba beginner schema: chat sessions + flat kanban tasks. No weeks, no vault index.
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 
@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS habits (
     unidade TEXT NOT NULL DEFAULT '',
     meta REAL NOT NULL DEFAULT 0,
     dias TEXT NOT NULL DEFAULT '',
+    escudo_marco INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
 
@@ -56,6 +57,7 @@ CREATE TABLE IF NOT EXISTS habit_checks (
     data TEXT NOT NULL,
     valor REAL NOT NULL DEFAULT 0,
     feito INTEGER NOT NULL DEFAULT 0,
+    protegido INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (habit_id, data)
 );
 
