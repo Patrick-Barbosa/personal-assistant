@@ -100,12 +100,12 @@ function Card({ task, showDay, onChanged, onOpen, suppressClick, cats }: { task:
 function PlaceColumn({ place, tasks, hint, wide, onChanged, onOpen, suppressClick, cats }: { place: Place; tasks: Task[]; hint?: string; wide?: boolean; onChanged: () => void; onOpen: (t: Task) => void; suppressClick: () => boolean; cats: Category[] }) {
   const { setNodeRef, isOver } = useDroppable({ id: `place-${place}` });
   return (
-    <div ref={setNodeRef} className={`flex min-h-[180px] flex-col overflow-hidden rounded-[16px] border p-3 ${wide ? "sm:col-span-2 xl:col-span-2" : ""} ${isOver ? "border-[#30a81d] bg-[#ffffff]" : "border-[#d9d9d9] bg-[#ffffff]/70"}`}>
+    <div ref={setNodeRef} className={`flex min-h-[180px] flex-col overflow-hidden rounded-[16px] border p-3 ${wide ? "sm:row-span-2" : ""} ${isOver ? "border-[#30a81d] bg-[#ffffff]" : "border-[#d9d9d9] bg-[#ffffff]/70"}`}>
       <h2 className="flim-nav font-bold tabular-nums text-[#141414]">
         {PLACE_LABEL[place]} ({tasks.length})
       </h2>
       {hint && <p className="mb-2 text-[11px] text-[#141414]/50">{hint}</p>}
-      <div className="max-h-[240px] space-y-2 overflow-y-auto pr-0.5">
+      <div className={`${wide ? "max-h-[500px]" : "max-h-[240px]"} space-y-2 overflow-y-auto pr-0.5`}>
         {tasks.length === 0 && (
           <div className="rounded-[8px] border border-dashed border-[#d9d9d9] px-3 py-4 text-center text-xs text-[#141414]/40">
             {place === "backlog" ? "Vazio — peça à IA" : place === "done" ? "Nada feito ainda" : "Arraste tarefas para cá"}
