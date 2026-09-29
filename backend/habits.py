@@ -161,7 +161,9 @@ def set_check(conn, habit_id: str, data: str, patch) -> dict:
         feito = 1 if patch.get("feito") else 0
         if row["tipo"] == "binary":
             valor = feito
-        elif feito and "valor" not in patch:
+        elif not feito:
+            valor = 0
+        elif "valor" not in patch:
             meta = row["meta"] if "meta" in row.keys() else 0
             if (meta or 0) > 0:
                 valor = meta

@@ -103,6 +103,8 @@ def main() -> int:
         s, hn = req("POST", "/api/habits", {"nome": "Meta", "tipo": "numeric", "unidade": "min", "meta": 30})
         s, chkn = req("POST", f"/api/habits/{hn['id']}/check", {"feito": 1})
         check("check-fills-meta", s == 200 and chkn["valor"] == 30 and chkn["feito"] == 1, str(chkn)[:80])
+        s, chkn = req("POST", f"/api/habits/{hn['id']}/check", {"feito": 0})
+        check("uncheck-zeroes", s == 200 and chkn["valor"] == 0 and chkn["feito"] == 0, str(chkn)[:80])
         s, _ = req("DELETE", f"/api/habits/{hn['id']}")
         check("check-fills-meta-cleanup", s == 200)
         s, _ = req("DELETE", f"/api/tasks/{tid}")
