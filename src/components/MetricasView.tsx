@@ -50,6 +50,28 @@ export default function MetricasView() {
         </p>
       </div>
 
+      <div className="grid grid-cols-2 gap-2 tabular-nums md:grid-cols-4">
+        <div className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3">
+          <p className="flim-nav text-[#141414]/50">Média hábitos</p>
+          <p className="text-xl font-bold text-[#141414]">{m.geral.media_pct}%</p>
+        </div>
+        <div className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3">
+          <p className="flim-nav text-[#141414]/50">Hábitos 7/7</p>
+          <p className="text-xl font-bold text-[#141414]">{m.geral.cheios}</p>
+        </div>
+        <div className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3">
+          <p className="flim-nav text-[#141414]/50">Tarefas</p>
+          <p className="text-sm font-bold text-[#141414]">
+            {m.tarefas.concluidas}/{m.tarefas.criadas} ({m.tarefas.pct}%)
+          </p>
+          <p className="text-xs text-[#141414]/50">carregadas: {m.tarefas.carregadas}</p>
+        </div>
+        <div className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3">
+          <p className="flim-nav text-[#141414]/50">Notas</p>
+          <p className="text-xl font-bold text-[#141414]">{m.notas.total}</p>
+        </div>
+      </div>
+
       <section className="rounded-[16px] border border-[#141414] bg-[#ffffff] p-5">
         <div className="mb-2 flex items-center gap-2">
           <Flame size={16} aria-hidden="true" />
@@ -126,19 +148,6 @@ export default function MetricasView() {
         </div>
         <div className="space-y-4">
       <section className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-5">
-        <h2 className="flim-nav mb-2 font-bold text-[#141414]">Evolução (hábitos feitos/dia)</h2>
-        <ResponsiveContainer width="100%" height={160}>
-          <LineChart data={m.serie}>
-            <CartesianGrid stroke="#d9d9d9" strokeDasharray="3 3" />
-            <XAxis dataKey="data" tick={{ fill: "#141414", fontSize: 11 }} />
-            <YAxis allowDecimals={false} tick={{ fill: "#141414", fontSize: 11 }} />
-            <Tooltip />
-            <Line type="monotone" dataKey="feitos" stroke="#141414" strokeWidth={2} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </section>
-
-      <section className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-5">
         <div className="mb-2 flex items-center gap-2">
           <h2 className="flim-nav font-bold text-[#141414]">Resumo IA</h2>
           <button onClick={gerarResumo} disabled={loadingResumo} className="flim-nav rounded-[8px] bg-[#141414] px-3 py-1 text-[#ffffff] disabled:opacity-40">
@@ -167,27 +176,18 @@ export default function MetricasView() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 tabular-nums md:grid-cols-4">
-        <div className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3">
-          <p className="flim-nav text-[#141414]/50">Média hábitos</p>
-          <p className="text-xl font-bold text-[#141414]">{m.geral.media_pct}%</p>
-        </div>
-        <div className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3">
-          <p className="flim-nav text-[#141414]/50">Hábitos 7/7</p>
-          <p className="text-xl font-bold text-[#141414]">{m.geral.cheios}</p>
-        </div>
-        <div className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3">
-          <p className="flim-nav text-[#141414]/50">Tarefas</p>
-          <p className="text-sm font-bold text-[#141414]">
-            {m.tarefas.concluidas}/{m.tarefas.criadas} ({m.tarefas.pct}%)
-          </p>
-          <p className="text-xs text-[#141414]/50">carregadas: {m.tarefas.carregadas}</p>
-        </div>
-        <div className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3">
-          <p className="flim-nav text-[#141414]/50">Notas</p>
-          <p className="text-xl font-bold text-[#141414]">{m.notas.total}</p>
-        </div>
-      </div>
+      <section className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-5">
+        <h2 className="flim-nav mb-2 font-bold text-[#141414]">Evolução (hábitos feitos/dia)</h2>
+        <ResponsiveContainer width="100%" height={160}>
+          <LineChart data={m.serie}>
+            <CartesianGrid stroke="#d9d9d9" strokeDasharray="3 3" />
+            <XAxis dataKey="data" tick={{ fill: "#141414", fontSize: 11 }} />
+            <YAxis allowDecimals={false} tick={{ fill: "#141414", fontSize: 11 }} />
+            <Tooltip />
+            <Line type="monotone" dataKey="feitos" stroke="#141414" strokeWidth={2} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </section>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
