@@ -15,14 +15,16 @@ def now_iso() -> str:
 
 
 def to_dict(row) -> dict:
+    keys = row.keys()
     return {
         "id": row["id"],
         "titulo": row["titulo"],
         "column": row["task_column"],
         "position": row["position"],
-        "day_label": row["day_label"] if "day_label" in row.keys() else None,
-        "note_md": row["note_md"] if "note_md" in row.keys() else "",
-        "habit_id": row["habit_id"] if "habit_id" in row.keys() else None,
+        "day_label": row["day_label"] if "day_label" in keys else None,
+        "note_md": row["note_md"] if "note_md" in keys else "",
+        "habit_id": row["habit_id"] if "habit_id" in keys else None,
+        "categoria": row["categoria"] if "categoria" in keys else "",
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
@@ -97,6 +99,11 @@ def update_task(conn, task_id: str, patch: dict) -> dict:
     if "habit_id" in patch:
         hab = patch.get("habit_id")
         updates["habit_id"] = hab if hab else None
+    if "categoria" in patch:
+        cat = (patch.get("categoria") or "").strip()
+        if len(cat) > 30:
+            raise ValueError("categoria muito longa (máx 30)")
+        updates["categoria"] = cat
     if updates:
         sets = ", ".join(f"{k} = ?" for k in updates)
         conn.execute(f"UPDATE tasks SET {sets}, updated_at = ? WHERE id = ?", (*updates.values(), now_iso(), task_id))

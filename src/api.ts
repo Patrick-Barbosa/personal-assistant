@@ -40,17 +40,17 @@ export const api = {
     request<Task>("POST", `/api/tasks/${id}/move`, { column, index }),
   placeTask: (id: string, dest: string, index: number) =>
     request<Task>("POST", `/api/tasks/${id}/place`, { dest, index }),
-  updateTask: (id: string, patch: { titulo?: string; day_label?: string | null; note_md?: string; habit_id?: string | null }) =>
+  updateTask: (id: string, patch: { titulo?: string; day_label?: string | null; note_md?: string; habit_id?: string | null; categoria?: string }) =>
     request<Task>("PATCH", `/api/tasks/${id}`, patch),
   deleteTask: (id: string) => request<{ ok: boolean }>("DELETE", `/api/tasks/${id}`),
 
   listHabits: (data?: string) => request<Habit[]>("GET", data ? `/api/habits?data=${data}` : "/api/habits"),
-  createHabit: (nome: string, tipo: "binary" | "numeric" = "binary", unidade = "") =>
-    request<Habit>("POST", "/api/habits", { nome, tipo, unidade }),
+  createHabit: (nome: string, tipo: "binary" | "numeric" = "binary", unidade = "", meta = 0) =>
+    request<Habit>("POST", "/api/habits", { nome, tipo, unidade, meta }),
   deleteHabit: (id: string) => request<{ ok: boolean }>("DELETE", `/api/habits/${id}`),
   checkHabit: (id: string, valor: number, data?: string) =>
     request<Habit>("POST", `/api/habits/${id}/check`, { valor, data }),
-  updateHabit: (id: string, patch: { nome?: string; unidade?: string }) =>
+  updateHabit: (id: string, patch: { nome?: string; unidade?: string; meta?: number }) =>
     request<Habit>("PATCH", `/api/habits/${id}`, patch),
   getHoje: (data?: string) => request<Hoje>("GET", data ? `/api/hoje?data=${data}` : "/api/hoje"),
   saveNota: (conteudo: string, data?: string) =>

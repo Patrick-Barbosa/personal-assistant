@@ -97,6 +97,7 @@ export default function MetricasView() {
             {m.habitos.map((h) => (
               <p key={h.id} className="text-xs text-[#141414]/60">
                 {h.nome}: {h.done_days}/7 dias, streak {h.streak}
+                {h.tipo === "numeric" && h.meta > 0 && ` · meta ${h.meta}${h.unidade ? ` ${h.unidade}` : ""}`}
               </p>
             ))}
           </div>

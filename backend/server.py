@@ -150,7 +150,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/habits":
                 body = read_json(self)
                 try:
-                    h = habits.create_habit(conn, body.get("nome", ""), body.get("tipo") or "binary", body.get("unidade") or "")
+                    h = habits.create_habit(conn, body.get("nome", ""), body.get("tipo") or "binary", body.get("unidade") or "", body.get("meta") or 0)
                     return send_json(self, 201, h)
                 except ValueError as e:
                     return send_json(self, 400, {"error": str(e)})

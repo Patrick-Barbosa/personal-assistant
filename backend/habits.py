@@ -26,14 +26,25 @@ def _check_data(data: str) -> str:
 
 
 def habit_to_dict(row, valor: float = 0) -> dict:
+    keys = row.keys()
     return {
         "id": row["id"],
         "nome": row["nome"],
         "tipo": row["tipo"],
         "unidade": row["unidade"],
+        "meta": row["meta"] if "meta" in keys else 0,
         "valor": valor,
         "created_at": row["created_at"],
     }
+
+
+def cumprido(tipo: str, valor: float, meta: float) -> bool:
+    """Dia conta como feito? Numérico com meta exige atingir a meta."""
+    if (valor or 0) <= 0:
+        return False
+    if tipo == "numeric" and (meta or 0) > 0:
+        return valor >= meta
+    return True
 
 
 def list_habits(conn, data: str = "") -> list[dict]:
@@ -43,20 +54,26 @@ def list_habits(conn, data: str = "") -> list[dict]:
     return [habit_to_dict(r, checks.get(r["id"], 0)) for r in rows]
 
 
-def create_habit(conn, nome: str, tipo: str = "binary", unidade: str = "") -> dict:
+def create_habit(conn, nome: str, tipo: str = "binary", unidade: str = "", meta: float = 0) -> dict:
     nome = (nome or "").strip()
     if not nome:
         raise ValueError("nome vazio")
     tipo = (tipo or "binary").strip()
     if tipo not in TIPOS:
         raise ValueError(f"tipo inválido: {tipo}")
+    try:
+        meta = float(meta or 0)
+    except (TypeError, ValueError):
+        raise ValueError("meta deve ser número")
+    if meta < 0:
+        raise ValueError("meta não pode ser negativa")
     total = conn.execute("SELECT COUNT(*) AS c FROM habits").fetchone()["c"]
     if total >= MAX_HABITS:
         raise ValueError("máximo de 10 hábitos")
     hid = f"h_{uuid.uuid4().hex[:12]}"
     conn.execute(
-        "INSERT INTO habits (id, nome, tipo, unidade, created_at) VALUES (?, ?, ?, ?, ?)",
-        (hid, nome, tipo, (unidade or "").strip(), now_iso()),
+        "INSERT INTO habits (id, nome, tipo, unidade, meta, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (hid, nome, tipo, (unidade or "").strip(), meta, now_iso()),
     )
     conn.commit()
     return habit_to_dict(conn.execute("SELECT * FROM habits WHERE id = ?", (hid,)).fetchone(), 0)
@@ -81,6 +98,14 @@ def update_habit(conn, habit_id: str, patch: dict) -> dict:
         updates["nome"] = nome
     if "unidade" in patch:
         updates["unidade"] = (patch.get("unidade") or "").strip()
+    if "meta" in patch:
+        try:
+            meta = float(patch.get("meta") or 0)
+        except (TypeError, ValueError):
+            raise ValueError("meta deve ser número")
+        if meta < 0:
+            raise ValueError("meta não pode ser negativa")
+        updates["meta"] = meta
     if updates:
         sets = ", ".join(f"{k} = ?" for k in updates)
         conn.execute(f"UPDATE habits SET {sets} WHERE id = ?", (*updates.values(), habit_id))

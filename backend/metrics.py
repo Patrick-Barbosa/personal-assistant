@@ -32,13 +32,16 @@ def get_metricas(conn, data: str = "") -> dict:
     for day in days:
         feitos = 0
         for h in hrows:
+            hkeys = h.keys()
             r = conn.execute("SELECT valor FROM habit_checks WHERE habit_id = ? AND data = ?", (h["id"], day)).fetchone()
-            if r and (r["valor"] or 0) > 0:
+            if r and habits.cumprido(h["tipo"], r["valor"], h["meta"] if "meta" in hkeys else 0):
                 feitos += 1
         serie.append({"data": day[5:], "feitos": feitos})
     for h in hrows:
+        hkeys = h.keys()
+        hmeta = h["meta"] if "meta" in hkeys else 0
         dm = _done_map(conn, h["id"], days)
-        done_days = sum(1 for d in days if (dm.get(d) or 0) > 0)
+        done_days = sum(1 for d in days if habits.cumprido(h["tipo"], dm.get(d) or 0, hmeta))
         pct = round(done_days / 7 * 100)
         streak = 0
         d = datetime.strptime(anchor, "%Y-%m-%d").date()
@@ -47,12 +50,12 @@ def get_metricas(conn, data: str = "") -> dict:
             if key < days[0]:
                 break
             r = conn.execute("SELECT valor FROM habit_checks WHERE habit_id = ? AND data = ?", (h["id"], key)).fetchone()
-            if r and (r["valor"] or 0) > 0:
+            if r and habits.cumprido(h["tipo"], r["valor"], hmeta):
                 streak += 1
                 d -= timedelta(days=1)
             else:
                 break
-        habitos.append({"id": h["id"], "nome": h["nome"], "pct": pct, "streak": streak, "done_days": done_days})
+        habitos.append({"id": h["id"], "nome": h["nome"], "tipo": h["tipo"], "unidade": h["unidade"], "meta": hmeta, "pct": pct, "streak": streak, "done_days": done_days})
 
     media = round(sum(h["pct"] for h in habitos) / len(habitos)) if habitos else 0
     cheios = sum(1 for h in habitos if h["done_days"] == 7)

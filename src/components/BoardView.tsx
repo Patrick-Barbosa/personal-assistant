@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { DndContext, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import { api } from "../api";
-import { DAY_LABELS, TRAY, WEEK_PLACES, type Board, type Place, type Task } from "../types";
+import { DAY_LABELS, TRAY, WEEK_PLACES, categoryColor, categoryLabel, type Board, type Place, type Task } from "../types";
 import TaskDetail from "./TaskDetail";
 
 interface Props {
@@ -59,6 +59,12 @@ function Card({ task, showDay, onChanged, onOpen }: { task: Task; showDay: boole
         >
           ⠿
         </button>
+        {task.categoria && (
+          <span className="flex items-center gap-1 rounded-full bg-[#f5f5f5] px-2 py-0.5 text-[11px] font-semibold text-[#141414]" title={categoryLabel(task.categoria)}>
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: categoryColor(task.categoria) }} />
+            {categoryLabel(task.categoria)}
+          </span>
+        )}
         {showDay && task.day_label && (
           <span className="rounded-full border border-[#30a81d] px-2 py-0.5 text-[11px] font-semibold text-[#141414]">{task.day_label}</span>
         )}
@@ -97,12 +103,12 @@ function Card({ task, showDay, onChanged, onOpen }: { task: Task; showDay: boole
 function PlaceColumn({ place, tasks, hint, onChanged, onOpen }: { place: Place; tasks: Task[]; hint?: string; onChanged: () => void; onOpen: (t: Task) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: `place-${place}` });
   return (
-    <div ref={setNodeRef} className={`flex w-[240px] shrink-0 flex-col overflow-hidden rounded-[16px] border p-3 ${isOver ? "border-[#30a81d] bg-[#ffffff]" : "border-[#d9d9d9] bg-[#ffffff]/70"}`}>
+    <div ref={setNodeRef} className={`flex min-h-[180px] flex-col overflow-hidden rounded-[16px] border p-3 ${isOver ? "border-[#30a81d] bg-[#ffffff]" : "border-[#d9d9d9] bg-[#ffffff]/70"}`}>
       <h2 className="flim-nav font-bold text-[#141414]">
         {PLACE_LABEL[place]} ({tasks.length})
       </h2>
       {hint && <p className="mb-2 text-[11px] text-[#141414]/50">{hint}</p>}
-      <div className="flex-1 space-y-2 overflow-y-auto">
+      <div className="max-h-[240px] space-y-2 overflow-y-auto pr-0.5">
         {tasks.map((t) => (
           <Card key={t.id} task={t} showDay={place === "backlog" || place === "done"} onChanged={onChanged} onOpen={() => onOpen(t)} />
         ))}
@@ -130,10 +136,13 @@ function TrayStrip({ tasks, onChanged, onOpen }: { tasks: Task[]; onChanged: () 
 export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
   const [draft, setDraft] = useState("");
   const [selected, setSelected] = useState<Task | null>(null);
+  const [filter, setFilter] = useState("");
 
   const groups = useMemo(() => {
-    const g: Record<Place, Task[]> = { backlog: [...board.todo], done: [...board.done], [TRAY]: [], Seg: [], Ter: [], Qua: [], Qui: [], Sex: [], Sab: [], Dom: [] };
+    const match = (t: Task) => !filter || (t.categoria ?? "") === filter;
+    const g: Record<Place, Task[]> = { backlog: board.todo.filter(match), done: board.done.filter(match), [TRAY]: [], Seg: [], Ter: [], Qua: [], Qui: [], Sex: [], Sab: [], Dom: [] };
     for (const t of board.doing) {
+      if (!match(t)) continue;
       if (t.day_label && (DAY_LABELS as readonly string[]).includes(t.day_label)) {
         g[t.day_label as Place].push(t);
       } else {
@@ -141,6 +150,14 @@ export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
       }
     }
     return g;
+  }, [board, filter]);
+
+  const usedCats = useMemo(() => {
+    const s = new Set<string>();
+    for (const col of [...board.todo, ...board.doing, ...board.done]) {
+      if (col.categoria) s.add(col.categoria);
+    }
+    return [...s];
   }, [board]);
 
   const ownerOf = useMemo(() => {
@@ -191,6 +208,26 @@ export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
       <p className="mb-3 text-sm text-[#141414]/60">
         A IA preenche o <strong>Backlog</strong>. Você arrasta para os dias.
       </p>
+      {usedCats.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1">
+          <button
+            onClick={() => setFilter("")}
+            className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${filter === "" ? "border-[#141414] bg-[#141414] text-[#ffffff]" : "border-[#d9d9d9] bg-[#ffffff] text-[#141414]"}`}
+          >
+            Todas
+          </button>
+          {usedCats.map((c) => (
+            <button
+              key={c}
+              onClick={() => setFilter(filter === c ? "" : c)}
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${filter === c ? "border-[#141414] bg-[#141414] text-[#ffffff]" : "border-[#d9d9d9] bg-[#ffffff] text-[#141414]"}`}
+            >
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: categoryColor(c) }} />
+              {categoryLabel(c)}
+            </button>
+          ))}
+        </div>
+      )}
       <DndContext onDragEnd={handleDragEnd}>
         {groups[TRAY].length > 0 && (
           <TrayStrip tasks={groups[TRAY]} onChanged={refresh} onOpen={setSelected} />
@@ -207,7 +244,7 @@ export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
             Adicionar
           </button>
         </div>
-        <div className="flex flex-1 gap-3 overflow-x-auto pb-2">
+        <div className="grid flex-1 grid-cols-1 content-start gap-3 overflow-y-auto pb-2 sm:grid-cols-2 xl:grid-cols-3">
           <PlaceColumn place="backlog" tasks={groups.backlog} hint="A IA planeja aqui" onChanged={refresh} onOpen={setSelected} />
           {DAY_LABELS.map((d) => (
             <PlaceColumn key={d} place={d as Place} tasks={groups[d as Place]} onChanged={refresh} onOpen={setSelected} />

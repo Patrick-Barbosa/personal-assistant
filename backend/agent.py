@@ -135,7 +135,8 @@ def build_context(conn) -> str:
         rows = []
         for t in items:
             day = f" [{t.get('day_label')}]" if t.get("day_label") else ""
-            rows.append(f"- {t.get('titulo')}{day} (id={t.get('id')})")
+            cat = f" ({t.get('categoria')})" if t.get("categoria") else ""
+            rows.append(f"- {t.get('titulo')}{day}{cat} (id={t.get('id')})")
         lines.append(f"## {col}\n" + "\n".join(rows))
     try:
         habs = habits.list_habits(conn, habits.today_str())

@@ -22,6 +22,7 @@ export default function App() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [board, setBoard] = useState<Board>(EMPTY_BOARD);
+  const [creating, setCreating] = useState(false);
 
   const refreshSessions = useCallback(async () => {
     const list = await api.listSessions();
@@ -43,10 +44,16 @@ export default function App() {
   }, [refreshSessions, refreshBoard]);
 
   async function newSession() {
-    const s = await api.createSession("Nova Conversa");
-    const list = await refreshSessions();
-    setSessions(list);
-    setActiveId(s.id);
+    if (creating) return;
+    setCreating(true);
+    try {
+      const s = await api.createSession("Nova Conversa");
+      const list = await refreshSessions();
+      setSessions(list);
+      setActiveId(s.id);
+    } finally {
+      setCreating(false);
+    }
   }
 
   async function planWithAI() {
@@ -90,9 +97,10 @@ export default function App() {
           <>
             <button
               onClick={newSession}
-              className="flim-nav mx-3 mb-2 rounded-[8px] bg-[#141414] px-3 py-2 text-[#ffffff]"
+              disabled={creating}
+              className="flim-nav mx-3 mb-2 rounded-[8px] bg-[#141414] px-3 py-2 text-[#ffffff] disabled:opacity-40"
             >
-              + Nova conversa
+              {creating ? "Criando…" : "+ Nova conversa"}
             </button>
             <div className="flex-1 space-y-1 overflow-y-auto px-3 pb-3">
               {sessions.map((s) => (
@@ -133,8 +141,8 @@ export default function App() {
             <ChatView key={activeId} sessionId={activeId} />
           ) : (
             <div className="flex h-full items-center justify-center">
-              <button onClick={newSession} className="flim-nav rounded-[8px] bg-[#141414] px-5 py-2.5 text-[#ffffff]">
-                Criar primeira conversa
+              <button onClick={newSession} disabled={creating} className="flim-nav rounded-[8px] bg-[#141414] px-5 py-2.5 text-[#ffffff] disabled:opacity-40">
+                {creating ? "Criando…" : "Criar primeira conversa"}
               </button>
             </div>
           )

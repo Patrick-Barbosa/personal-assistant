@@ -4,7 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { diffLines } from "diff";
 import { api } from "../api";
-import { DAY_LABELS, type Task } from "../types";
+import { CATEGORIES, DAY_LABELS, type Task } from "../types";
 
 interface Props {
   task: Task | null;
@@ -17,6 +17,7 @@ type Mode = "editar" | "previa" | "diff";
 export default function TaskDetail({ task, onClose, onSaved }: Props) {
   const [titulo, setTitulo] = useState("");
   const [dayLabel, setDayLabel] = useState("");
+  const [categoria, setCategoria] = useState("");
   const [note, setNote] = useState("");
   const [savedNote, setSavedNote] = useState("");
   const [mode, setMode] = useState<Mode>("editar");
@@ -27,6 +28,7 @@ export default function TaskDetail({ task, onClose, onSaved }: Props) {
     if (task) {
       setTitulo(task.titulo);
       setDayLabel(task.day_label ?? "");
+      setCategoria(task.categoria ?? "");
       setNote(task.note_md ?? "");
       setSavedNote(task.note_md ?? "");
       setMode("editar");
@@ -39,7 +41,7 @@ export default function TaskDetail({ task, onClose, onSaved }: Props) {
     return diffLines(savedNote || "", note || "");
   }, [mode, savedNote, note]);
 
-  const dirty = task ? titulo.trim() !== task.titulo || dayLabel !== (task.day_label ?? "") || note !== (task.note_md ?? "") : false;
+  const dirty = task ? titulo.trim() !== task.titulo || dayLabel !== (task.day_label ?? "") || categoria !== (task.categoria ?? "") || note !== (task.note_md ?? "") : false;
 
   async function save() {
     if (!task || saving) return;
@@ -54,6 +56,7 @@ export default function TaskDetail({ task, onClose, onSaved }: Props) {
       await api.updateTask(task.id, {
         titulo: t,
         day_label: dayLabel || null,
+        categoria,
         note_md: note,
       });
       setSavedNote(note);
@@ -100,6 +103,26 @@ export default function TaskDetail({ task, onClose, onSaved }: Props) {
                     className={`rounded-full border px-3 py-1 text-xs font-semibold ${dayLabel === d ? "border-[#141414] bg-[#141414] text-[#ffffff]" : "border-[#d9d9d9] text-[#141414]"}`}
                   >
                     {d}
+                  </button>
+                ))}
+              </div>
+
+              <label className="flim-nav mb-1 block text-[#141414]/60">Categoria</label>
+              <div className="mb-4 flex flex-wrap gap-1">
+                <button
+                  onClick={() => setCategoria("")}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${categoria === "" ? "border-[#141414] bg-[#141414] text-[#ffffff]" : "border-[#d9d9d9] text-[#141414]"}`}
+                >
+                  Sem categoria
+                </button>
+                {CATEGORIES.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setCategoria(c.id)}
+                    className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${categoria === c.id ? "border-[#141414] bg-[#141414] text-[#ffffff]" : "border-[#d9d9d9] text-[#141414]"}`}
+                  >
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c.color }} />
+                    {c.label}
                   </button>
                 ))}
               </div>

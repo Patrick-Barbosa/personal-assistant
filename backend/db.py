@@ -28,15 +28,19 @@ def init_db() -> None:
         conn.close()
 
 
+def _ensure_column(conn, table: str, column: str, ddl: str) -> None:
+    cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+
+
 def _migrate_tasks(conn) -> None:
-    """Additive migration for DBs created before day_label / note_md / habit_id."""
-    cols = {r["name"] for r in conn.execute("PRAGMA table_info(tasks)").fetchall()}
-    if "day_label" not in cols:
-        conn.execute("ALTER TABLE tasks ADD COLUMN day_label TEXT")
-    if "note_md" not in cols:
-        conn.execute("ALTER TABLE tasks ADD COLUMN note_md TEXT NOT NULL DEFAULT ''")
-    if "habit_id" not in cols:
-        conn.execute("ALTER TABLE tasks ADD COLUMN habit_id TEXT")
+    """Additive migration for DBs created before newer task columns."""
+    _ensure_column(conn, "tasks", "day_label", "TEXT")
+    _ensure_column(conn, "tasks", "note_md", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "tasks", "habit_id", "TEXT")
+    _ensure_column(conn, "tasks", "categoria", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "habits", "meta", "REAL NOT NULL DEFAULT 0")
 
 
 def rows_to_dicts(cursor) -> list[dict]:

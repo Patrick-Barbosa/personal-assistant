@@ -11,11 +11,13 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
   const [draft, setDraft] = useState(String(habit.valor ?? 0));
   const [editingUnit, setEditingUnit] = useState(false);
   const [unitDraft, setUnitDraft] = useState(habit.unidade ?? "");
+  const [metaDraft, setMetaDraft] = useState(String(habit.meta ?? 0));
 
   useEffect(() => {
     setDraft(String(habit.valor ?? 0));
     setUnitDraft(habit.unidade ?? "");
-  }, [habit.valor, habit.unidade]);
+    setMetaDraft(String(habit.meta ?? 0));
+  }, [habit.valor, habit.unidade, habit.meta]);
 
   async function toggleBinary(checked: boolean) {
     await api.checkHabit(habit.id, checked ? 1 : 0, data);
@@ -30,8 +32,12 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
 
   async function saveUnit() {
     setEditingUnit(false);
-    if (unitDraft.trim() !== (habit.unidade ?? "")) {
-      await api.updateHabit(habit.id, { unidade: unitDraft.trim() });
+    const patch: { unidade?: string; meta?: number } = {};
+    if (unitDraft.trim() !== (habit.unidade ?? "")) patch.unidade = unitDraft.trim();
+    const m = Number(metaDraft) || 0;
+    if (m !== (habit.meta ?? 0)) patch.meta = m;
+    if (Object.keys(patch).length > 0) {
+      await api.updateHabit(habit.id, patch);
       onChanged();
     }
   }
@@ -41,7 +47,8 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
     onChanged();
   }
 
-  const sliderMax = Math.max(10, Math.ceil((Number(draft) || 0) * 1.5), Math.ceil(habit.valor * 1.5));
+  const sliderMax = Math.max(10, Math.ceil((Number(draft) || 0) * 1.5), Math.ceil(habit.valor * 1.5), Math.ceil((habit.meta || 0) * 1.5));
+  const progress = habit.meta > 0 ? Math.min(100, Math.round((habit.valor / habit.meta) * 100)) : 0;
 
   return (
     <div className="flex items-center gap-3 rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] px-3 py-2">
@@ -68,15 +75,33 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
             title="Valor de hoje"
           />
           {editingUnit ? (
-            <input
-              autoFocus
-              value={unitDraft}
-              onChange={(e) => setUnitDraft(e.target.value)}
-              onBlur={saveUnit}
-              onKeyDown={(e) => e.key === "Enter" && saveUnit()}
-              placeholder="páginas, km, min…"
-              className="w-28 rounded-[8px] border border-[#141414] bg-[#ffffff] px-2 py-1 text-sm outline-none"
-            />
+            <form
+              className="flex items-center gap-1"
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveUnit();
+              }}
+            >
+              <input
+                autoFocus
+                value={unitDraft}
+                onChange={(e) => setUnitDraft(e.target.value)}
+                placeholder="páginas, km, min…"
+                className="w-28 rounded-[8px] border border-[#141414] bg-[#ffffff] px-2 py-1 text-sm outline-none"
+              />
+              <input
+                value={metaDraft}
+                onChange={(e) => setMetaDraft(e.target.value)}
+                placeholder="meta"
+                type="number"
+                min={0}
+                className="w-20 rounded-[8px] border border-[#141414] bg-[#ffffff] px-2 py-1 text-sm outline-none"
+                title="Meta diária"
+              />
+              <button type="submit" className="flim-nav rounded-[6px] bg-[#141414] px-2 py-1 text-[#ffffff]">
+                OK
+              </button>
+            </form>
           ) : (
             <button onClick={() => setEditingUnit(true)} className="truncate text-sm text-[#141414]/60 hover:text-[#141414]" title="Clique para editar a unidade">
               {habit.unidade || "+ unidade"}
@@ -100,7 +125,17 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
       )}
       <span className="flex-1 truncate text-sm text-[#141414]">
         {habit.nome}
+        {habit.tipo === "numeric" && habit.meta > 0 && (
+          <span className="ml-2 text-xs text-[#141414]/50">
+            {habit.valor}/{habit.meta}{habit.unidade ? ` ${habit.unidade}` : ""}
+          </span>
+        )}
       </span>
+      {habit.tipo === "numeric" && habit.meta > 0 && (
+        <span className="hidden h-1.5 w-16 overflow-hidden rounded bg-[#e9e9e9] sm:block" title={`${progress}% da meta`}>
+          <span className="block h-full rounded bg-[#30a81d]" style={{ width: `${progress}%` }} />
+        </span>
+      )}
       <button onClick={remove} className="rounded px-1 text-xs text-[#141414]/30 hover:text-red-600" title="Excluir hábito">
         ✕
       </button>
@@ -115,6 +150,7 @@ export default function HojeView({ onTasksChanged }: { onTasksChanged?: () => vo
   const [nome, setNome] = useState("");
   const [tipo, setTipo] = useState<"binary" | "numeric">("binary");
   const [unidade, setUnidade] = useState("");
+  const [meta, setMeta] = useState("");
   const [nota, setNota] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [error, setError] = useState("");
@@ -134,9 +170,11 @@ export default function HojeView({ onTasksChanged }: { onTasksChanged?: () => vo
     if (!n) return;
     setError("");
     try {
+      const m = tipo === "numeric" ? Number(meta) || 0 : 0;
       setNome("");
       setUnidade("");
-      await api.createHabit(n, tipo, unidade.trim());
+      setMeta("");
+      await api.createHabit(n, tipo, unidade.trim(), m);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -201,13 +239,24 @@ export default function HojeView({ onTasksChanged }: { onTasksChanged?: () => vo
               </button>
             </div>
             {tipo === "numeric" && (
-              <input
-                value={unidade}
-                onChange={(e) => setUnidade(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addHabit()}
-                placeholder="Unidade — ex: páginas, km, min"
-                className="min-w-0 flex-1 rounded-[8px] border border-[#d9d9d9] bg-[#ffffff] px-3 py-2 text-sm outline-none placeholder:text-[#141414]/40"
-              />
+              <>
+                <input
+                  value={unidade}
+                  onChange={(e) => setUnidade(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addHabit()}
+                  placeholder="Mede em — ex: páginas, km, min"
+                  className="min-w-0 flex-1 rounded-[8px] border border-[#d9d9d9] bg-[#ffffff] px-3 py-2 text-sm outline-none placeholder:text-[#141414]/40"
+                />
+                <input
+                  value={meta}
+                  onChange={(e) => setMeta(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addHabit()}
+                  placeholder="Meta — ex: 20"
+                  type="number"
+                  min={0}
+                  className="w-28 rounded-[8px] border border-[#d9d9d9] bg-[#ffffff] px-3 py-2 text-sm outline-none placeholder:text-[#141414]/40"
+                />
+              </>
             )}
             <button onClick={addHabit} className="flim-nav rounded-[8px] bg-[#141414] px-4 py-2 text-[#ffffff]">
               Criar

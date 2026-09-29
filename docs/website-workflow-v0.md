@@ -7,9 +7,10 @@ Solo weekly operating system: talk to notes with AI, track daily habits, plan we
 
 ## 2. Locked decisions
 1. Notes: small notes, 1 .md note inside each task. Plus daily quick notes in Hoje.
-2. Habits: max 10. Mixed binary (did / not did) + numeric (e.g. 20min, 5 pages).
+2. Habits: max 10. Binary (did / not did) + numeric with 3 inputs: habit + metric measured (unit label, ex: minutos, páginas, km) + target (ex: 20). A numeric day counts when valor >= meta. Unit and target editable later.
 3. Week planning: AI creates tasks to backlog only, user moves to days manually. Text + AI + confirm for v0. Voice = v2 (out of current web-only stack).
 4. Metrics: standard defaults now, user-configurable targets later.
+5. Tasks carry a category (trabalho/estudo/pessoal/saúde/ideia) shown as a color tag, filterable in Semana.
 
 ## 3. Sitemap (v0)
 - /Hoje (new, daily entry)
@@ -23,8 +24,8 @@ No separate /Notas page for v0. Week columns replace the old todo/doing/done tri
 ## 4. Page inventory
 - Hoje: today's habits checklist, today's doing tasks, quick note input + AI assist.
 - Chat: sessions list (exists), chat grounded in notes + tasks + habits.
-- Semana: Backlog (AI fills here via "✨ Planejar com IA" → chat) + Seg–Dom day columns + Feito. User drags backlog → days to plan. "A agendar" tray holds doing tasks without a day. Drag sets column + day_label together (`place_task`).
-- Task detail: .md note, day label, optional habit link.
+- Semana: Backlog (AI fills here via "✨ Planejar com IA" → chat) + Seg–Dom day columns + Feito in a wrapping grid (no horizontal scroll). User drags backlog → days to plan. Category filter chips. "A agendar" tray holds doing tasks without a day. Drag sets column + day_label together (`place_task`).
+- Task detail: .md note, day label, category selector (color tag).
 - Métricas: habit % per habit + overall, streaks, tasks done/created/carried, notes count, AI weekly summary.
 
 ## 5. Hierarchy

@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     day_label TEXT,
     note_md TEXT NOT NULL DEFAULT '',
     habit_id TEXT,
+    categoria TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -45,6 +46,7 @@ CREATE TABLE IF NOT EXISTS habits (
     nome TEXT NOT NULL,
     tipo TEXT NOT NULL DEFAULT 'binary',
     unidade TEXT NOT NULL DEFAULT '',
+    meta REAL NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
 

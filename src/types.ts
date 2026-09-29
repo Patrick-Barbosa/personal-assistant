@@ -31,6 +31,7 @@ export interface Task {
   day_label: string | null;
   note_md: string;
   habit_id: string | null;
+  categoria: string;
   created_at: string;
   updated_at: string;
 }
@@ -45,11 +46,28 @@ export type WeekPlace = (typeof WEEK_PLACES)[number];
 export const TRAY = "agendar";
 export type Place = WeekPlace | typeof TRAY;
 
+export const CATEGORIES = [
+  { id: "trabalho", label: "Trabalho", color: "#141414" },
+  { id: "estudo", label: "Estudo", color: "#30a81d" },
+  { id: "pessoal", label: "Pessoal", color: "#ff8400" },
+  { id: "saude", label: "Saúde", color: "#21935b" },
+  { id: "ideia", label: "Ideia", color: "#fecc33" },
+] as const;
+
+export function categoryColor(cat: string): string {
+  return CATEGORIES.find((c) => c.id === cat)?.color ?? "#d9d9d9";
+}
+
+export function categoryLabel(cat: string): string {
+  return CATEGORIES.find((c) => c.id === cat)?.label ?? cat;
+}
+
 export interface Habit {
   id: string;
   nome: string;
   tipo: "binary" | "numeric";
   unidade: string;
+  meta: number;
   valor: number;
   created_at: string;
 }
@@ -70,6 +88,9 @@ export interface Hoje {
 export interface MetricaHabito {
   id: string;
   nome: string;
+  tipo: string;
+  unidade: string;
+  meta: number;
   pct: number;
   streak: number;
   done_days: number;
