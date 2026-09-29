@@ -161,6 +161,10 @@ def set_check(conn, habit_id: str, data: str, patch) -> dict:
         feito = 1 if patch.get("feito") else 0
         if row["tipo"] == "binary":
             valor = feito
+        elif feito and "valor" not in patch:
+            meta = row["meta"] if "meta" in row.keys() else 0
+            if (meta or 0) > 0:
+                valor = meta
     conn.execute(
         "INSERT INTO habit_checks (habit_id, data, valor, feito) VALUES (?, ?, ?, ?) "
         "ON CONFLICT(habit_id, data) DO UPDATE SET valor = excluded.valor, feito = excluded.feito",
