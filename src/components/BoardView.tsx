@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { DndContext, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
+import { GripVertical, Sparkles, StickyNote } from "lucide-react";
 import { api } from "../api";
 import { DAY_LABELS, TRAY, WEEK_PLACES, categoryColor, categoryLabel, type Board, type Place, type Task } from "../types";
 import TaskDetail from "./TaskDetail";
@@ -53,10 +54,10 @@ function Card({ task, showDay, onChanged, onOpen }: { task: Task; showDay: boole
       <div
         {...listeners}
         {...attributes}
-        className="mb-1 flex cursor-grab touch-none items-center gap-2 rounded-[6px] px-1 py-0.5 active:cursor-grabbing"
-        title="Arraste para mover entre Backlog, dias e Feito"
+        className="mb-1 flex cursor-grab touch-none select-none items-center gap-2 rounded-[6px] px-1 py-0.5 active:cursor-grabbing"
+        title="Arraste para mover entre Backlog, dias e Feito (ou abra o detalhe para escolher o dia pelo teclado)"
       >
-        <span className="text-xs text-[#141414]/40">⠿</span>
+        <GripVertical size={14} className="shrink-0 text-[#141414]/40" aria-hidden="true" />
         {task.categoria && (
           <span className="flex items-center gap-1 rounded-full bg-[#f5f5f5] px-2 py-0.5 text-[11px] font-semibold text-[#141414]" title={categoryLabel(task.categoria)}>
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: categoryColor(task.categoria) }} />
@@ -67,8 +68,8 @@ function Card({ task, showDay, onChanged, onOpen }: { task: Task; showDay: boole
           <span className="rounded-full border border-[#30a81d] px-2 py-0.5 text-[11px] font-semibold text-[#141414]">{task.day_label}</span>
         )}
         {task.note_md && (
-          <span className="text-[11px] text-[#141414]/50" title="Tem nota .md">
-            📝
+          <span className="text-[#141414]/50" title="Tem nota .md">
+            <StickyNote size={13} aria-hidden="true" />
           </span>
         )}
       </div>
@@ -90,7 +91,7 @@ function Card({ task, showDay, onChanged, onOpen }: { task: Task; showDay: boole
         <button onClick={onOpen} className="rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-2 py-0.5 text-xs text-[#141414]" title="Abrir detalhe">
           Abrir
         </button>
-        <button onClick={remove} className="ml-auto rounded px-2 py-0.5 text-xs text-[#141414]/40 hover:text-red-600" title="Excluir">
+        <button onClick={remove} aria-label={`Excluir tarefa ${task.titulo}`} className="ml-auto rounded px-2 py-0.5 text-xs text-[#141414]/40 transition-colors hover:text-red-600" title="Excluir">
           ✕
         </button>
       </div>
@@ -102,7 +103,7 @@ function PlaceColumn({ place, tasks, hint, onChanged, onOpen }: { place: Place; 
   const { setNodeRef, isOver } = useDroppable({ id: `place-${place}` });
   return (
     <div ref={setNodeRef} className={`flex min-h-[180px] flex-col overflow-hidden rounded-[16px] border p-3 ${isOver ? "border-[#30a81d] bg-[#ffffff]" : "border-[#d9d9d9] bg-[#ffffff]/70"}`}>
-      <h2 className="flim-nav font-bold text-[#141414]">
+      <h2 className="flim-nav font-bold tabular-nums text-[#141414]">
         {PLACE_LABEL[place]} ({tasks.length})
       </h2>
       {hint && <p className="mb-2 text-[11px] text-[#141414]/50">{hint}</p>}
@@ -210,8 +211,8 @@ export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
           <p className="flim-nav text-[#141414]/50">Planejamento semanal</p>
           <h1 className="text-[32px] font-bold leading-none text-[#141414]">Semana</h1>
         </div>
-        <button onClick={onPlanWithAI} className="flim-nav ml-auto rounded-[8px] bg-[#141414] px-4 py-2 text-[#ffffff]" title="A IA cria tarefas no backlog">
-          ✨ Planejar com IA
+        <button onClick={onPlanWithAI} className="flim-nav ml-auto flex items-center gap-1.5 rounded-[8px] bg-[#141414] px-4 py-2 text-[#ffffff] transition-colors hover:bg-[#2a2a2a]" title="A IA cria tarefas no backlog">
+          <Sparkles size={14} aria-hidden="true" /> Planejar com IA
         </button>
       </div>
       <p className="mb-3 text-sm text-[#141414]/60">
@@ -248,6 +249,8 @@ export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && add()}
             placeholder="NOVA TAREFA NO BACKLOG…"
+            aria-label="Nova tarefa no backlog"
+            autoComplete="off"
             className="flim-nav flex-1 rounded-[160px] border border-[#d9d9d9] bg-[#ffffff] px-5 py-3 text-[#141414] outline-none transition-colors placeholder:text-[#141414]/40 focus:border-[#141414]"
           />
           <button onClick={add} className="flim-nav rounded-[8px] bg-[#141414] px-5 py-2 text-[#ffffff] transition-colors hover:bg-[#2a2a2a]">

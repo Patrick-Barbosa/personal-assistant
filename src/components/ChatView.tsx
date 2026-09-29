@@ -35,6 +35,10 @@ export default function ChatView({ sessionId }: Props) {
   }
 
   function typewriter(id: number, full: string) {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setMessages((m) => m.map((x) => (x.id === id ? { ...x, content: full } : x)));
+      return;
+    }
     stopTyping();
     setTypingId(id);
     let i = 0;
@@ -107,11 +111,11 @@ export default function ChatView({ sessionId }: Props) {
         Com contexto: tarefas, hábitos de hoje e notas.
       </p>
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-2xl space-y-4 p-4">
+        <div className="mx-auto max-w-2xl space-y-4 p-4" aria-live="polite">
           {messages.length === 0 && (
             <div className="py-10 text-center">
               <span className="mx-auto mb-4 inline-block rounded-full border border-[#d9d9d9] bg-[#ffffff] p-2">
-                <img src="/logo.png" alt="" className="h-10 w-10" />
+                <img src="/logo.png" alt="Copernico" width={40} height={40} className="h-10 w-10" />
               </span>
               <h2 className="text-[27px] font-bold leading-tight text-[#141414]">Converse com suas notas</h2>
               <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-[#141414]/60">
@@ -146,7 +150,7 @@ export default function ChatView({ sessionId }: Props) {
             </div>
           ))}
           {sending && (
-            <div className="flex flex-col items-start">
+            <div className="flex flex-col items-start" aria-hidden="true">
               <div className="flex items-center gap-1.5 rounded-[16px] border border-[#141414]/25 bg-[#ffffff] px-4 py-3.5">
                 <span className="typing-dot" />
                 <span className="typing-dot" />
@@ -165,6 +169,8 @@ export default function ChatView({ sessionId }: Props) {
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send()}
             placeholder="PERGUNTE SOBRE SUA SEMANA…"
+            aria-label="Escreva sua mensagem"
+            autoComplete="off"
             className="flim-nav flex-1 rounded-[160px] border border-[#141414]/25 bg-[#ffffff] px-5 py-3 text-[#141414] outline-none transition-colors placeholder:text-[#141414]/40 focus:border-[#141414]"
           />
           <button

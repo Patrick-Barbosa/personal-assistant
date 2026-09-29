@@ -73,7 +73,7 @@ export default function TaskDetail({ task, onClose, onSaved }: Props) {
     <Dialog.Root open={task !== null} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 bg-[#141414]/40" />
-        <Dialog.Popup className="fixed left-1/2 top-1/2 max-h-[90vh] w-[min(640px,92vw)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-5 outline-none">
+        <Dialog.Popup className="fixed left-1/2 top-1/2 max-h-[90vh] w-[min(640px,92vw)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-5 outline-none">
           {task && (
             <>
               <Dialog.Title className="text-base font-bold text-[#141414]">Detalhe da tarefa</Dialog.Title>
@@ -85,7 +85,8 @@ export default function TaskDetail({ task, onClose, onSaved }: Props) {
               <input
                 value={titulo}
                 onChange={(e) => setTitulo(e.target.value)}
-                className="mb-3 w-full rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-3 py-2 text-sm text-[#141414] outline-none"
+                aria-label="Título da tarefa"
+                className="mb-3 w-full rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-3 py-2 text-sm text-[#141414] outline-none transition-colors focus:border-[#141414]"
               />
 
               <label className="flim-nav mb-1 block text-[#141414]/60">Dia da semana</label>
@@ -145,7 +146,8 @@ export default function TaskDetail({ task, onClose, onSaved }: Props) {
                   onChange={(e) => setNote(e.target.value)}
                   rows={10}
                   placeholder="Nota em Markdown… ex: ## Objetivo&#10;- [ ] passo 1"
-                  className="w-full rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-3 py-2 font-mono text-sm text-[#141414] outline-none placeholder:text-[#141414]/40"
+                  aria-label="Nota da tarefa em Markdown"
+                  className="w-full rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-3 py-2 font-mono text-sm text-[#141414] outline-none transition-colors placeholder:text-[#141414]/40 focus:border-[#141414]"
                 />
               )}
 

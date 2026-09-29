@@ -75,7 +75,7 @@ export default function App() {
     <div className="flex h-screen text-[#141414]">
       <aside className="flex w-60 flex-col border-r border-[#d9d9d9] bg-[#ffffff]">
         <div className="flex items-center gap-2 border-b border-[#d9d9d9] p-3">
-          <img src="/logo.png" alt="Flim" className="h-7 w-7" />
+          <img src="/logo.png" alt="Copernico" width={28} height={28} className="h-7 w-7" />
           <span className="flim-nav font-bold">Copernico</span>
           <span className="ml-auto h-2 w-2 rounded-full bg-[#30a81d]" title="online" />
         </div>
@@ -119,7 +119,8 @@ export default function App() {
                       e.stopPropagation();
                       removeSession(s.id);
                     }}
-                    className="hidden text-[#141414]/40 hover:text-red-600 group-hover:block"
+                    aria-label={`Excluir conversa ${s.title}`}
+                    className="hidden text-[#141414]/40 transition-colors hover:text-red-600 group-hover:block"
                     title="Excluir conversa"
                   >
                     ✕

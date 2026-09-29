@@ -71,3 +71,24 @@ body {
   background: #fecc33;
   color: #141414;
 }
+
+body {
+  touch-action: manipulation;
+}
+
+:where(button, a, input, textarea, select):focus-visible {
+  outline: 2px solid #141414;
+  outline-offset: 2px;
+}
+
+h1 {
+  text-wrap: balance;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typing-dot,
+  .typing-caret {
+    animation: none;
+    opacity: 1;
+  }
+}

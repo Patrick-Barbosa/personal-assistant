@@ -42,7 +42,7 @@ export default function MetricasView() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 tabular-nums md:grid-cols-4">
         <div className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-4">
           <p className="flim-nav text-[#141414]/50">Média hábitos</p>
           <p className="text-2xl font-bold text-[#141414]">{m.geral.media_pct}%</p>

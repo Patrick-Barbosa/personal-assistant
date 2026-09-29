@@ -56,6 +56,7 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
         <Checkbox.Root
           checked={habit.valor > 0}
           onCheckedChange={(checked) => toggleBinary(checked === true)}
+          aria-label={habit.nome}
           className="flex h-5 w-5 items-center justify-center rounded-[4px] border border-[#141414] bg-[#ffffff] outline-none data-[checked]:bg-[#30a81d] data-[checked]:text-[#ffffff]"
         >
           <Checkbox.Indicator className="text-sm data-[unchecked]:hidden">
@@ -71,7 +72,8 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
             onChange={(e) => setDraft(e.target.value)}
             onBlur={() => commitNumeric(Number(draft))}
             onKeyDown={(e) => e.key === "Enter" && commitNumeric(Number(draft))}
-            className="w-20 rounded-[8px] border border-[#141414] bg-[#ffffff] px-2 py-1 text-center text-sm font-bold text-[#141414] outline-none"
+            aria-label={`Valor de hoje para ${habit.nome}`}
+            className="w-20 rounded-[8px] border border-[#141414] bg-[#ffffff] px-2 py-1 text-center text-sm font-bold tabular-nums text-[#141414] outline-none"
             title="Valor de hoje"
           />
           {editingUnit ? (
@@ -87,6 +89,7 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
                 value={unitDraft}
                 onChange={(e) => setUnitDraft(e.target.value)}
                 placeholder="páginas, km, min…"
+                aria-label="Unidade de medida"
                 className="w-28 rounded-[8px] border border-[#141414] bg-[#ffffff] px-2 py-1 text-sm outline-none"
               />
               <input
@@ -95,6 +98,7 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
                 placeholder="meta"
                 type="number"
                 min={0}
+                aria-label="Meta diária"
                 className="w-20 rounded-[8px] border border-[#141414] bg-[#ffffff] px-2 py-1 text-sm outline-none"
                 title="Meta diária"
               />
@@ -136,7 +140,7 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
           <span className="block h-full rounded bg-[#30a81d]" style={{ width: `${progress}%` }} />
         </span>
       )}
-      <button onClick={remove} className="rounded px-1 text-xs text-[#141414]/30 hover:text-red-600" title="Excluir hábito">
+      <button onClick={remove} aria-label={`Excluir hábito ${habit.nome}`} className="rounded px-1 text-xs text-[#141414]/30 transition-colors hover:text-red-600" title="Excluir hábito">
         ✕
       </button>
     </div>
@@ -227,6 +231,8 @@ export default function HojeView({ onTasksChanged }: { onTasksChanged?: () => vo
             onChange={(e) => setNome(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addHabit()}
             placeholder="Nome do hábito… ex: Ler"
+            aria-label="Nome do novo hábito"
+            autoComplete="off"
             className="w-full rounded-[8px] border border-[#d9d9d9] bg-[#ffffff] px-3 py-2 text-sm text-[#141414] outline-none transition-colors placeholder:text-[#141414]/40 focus:border-[#141414]"
           />
           <div className="flex gap-2">
@@ -245,7 +251,8 @@ export default function HojeView({ onTasksChanged }: { onTasksChanged?: () => vo
                   onChange={(e) => setUnidade(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && addHabit()}
                   placeholder="Mede em — ex: páginas, km, min"
-                  className="min-w-0 flex-1 rounded-[8px] border border-[#d9d9d9] bg-[#ffffff] px-3 py-2 text-sm outline-none placeholder:text-[#141414]/40"
+                  aria-label="Unidade de medida do novo hábito"
+                  className="min-w-0 flex-1 rounded-[8px] border border-[#d9d9d9] bg-[#ffffff] px-3 py-2 text-sm outline-none transition-colors placeholder:text-[#141414]/40 focus:border-[#141414]"
                 />
                 <input
                   value={meta}
@@ -254,7 +261,8 @@ export default function HojeView({ onTasksChanged }: { onTasksChanged?: () => vo
                   placeholder="Meta — ex: 20"
                   type="number"
                   min={0}
-                  className="w-28 rounded-[8px] border border-[#d9d9d9] bg-[#ffffff] px-3 py-2 text-sm outline-none placeholder:text-[#141414]/40"
+                  aria-label="Meta do novo hábito"
+                  className="w-28 rounded-[8px] border border-[#d9d9d9] bg-[#ffffff] px-3 py-2 text-sm outline-none transition-colors placeholder:text-[#141414]/40 focus:border-[#141414]"
                 />
               </>
             )}
