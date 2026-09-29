@@ -97,10 +97,10 @@ function Card({ task, showDay, onChanged, onOpen, suppressClick, cats }: { task:
   );
 }
 
-function PlaceColumn({ place, tasks, hint, onChanged, onOpen, suppressClick, cats }: { place: Place; tasks: Task[]; hint?: string; onChanged: () => void; onOpen: (t: Task) => void; suppressClick: () => boolean; cats: Category[] }) {
+function PlaceColumn({ place, tasks, hint, wide, onChanged, onOpen, suppressClick, cats }: { place: Place; tasks: Task[]; hint?: string; wide?: boolean; onChanged: () => void; onOpen: (t: Task) => void; suppressClick: () => boolean; cats: Category[] }) {
   const { setNodeRef, isOver } = useDroppable({ id: `place-${place}` });
   return (
-    <div ref={setNodeRef} className={`flex min-h-[180px] flex-col overflow-hidden rounded-[16px] border p-3 ${isOver ? "border-[#30a81d] bg-[#ffffff]" : "border-[#d9d9d9] bg-[#ffffff]/70"}`}>
+    <div ref={setNodeRef} className={`flex min-h-[180px] flex-col overflow-hidden rounded-[16px] border p-3 ${wide ? "sm:col-span-2 xl:col-span-2" : ""} ${isOver ? "border-[#30a81d] bg-[#ffffff]" : "border-[#d9d9d9] bg-[#ffffff]/70"}`}>
       <h2 className="flim-nav font-bold tabular-nums text-[#141414]">
         {PLACE_LABEL[place]} ({tasks.length})
       </h2>
@@ -148,10 +148,16 @@ export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
 
   const groups = useMemo(() => {
     const match = (t: Task) => !filter || (t.categoria ?? "") === filter;
-    const g: Record<Place, Task[]> = { backlog: board.todo.filter(match), done: board.done.filter(match), [TRAY]: [], Seg: [], Ter: [], Qua: [], Qui: [], Sex: [], Sab: [], Dom: [] };
-    for (const t of board.doing) {
+    const g: Record<Place, Task[]> = { backlog: [], done: [], [TRAY]: [], Seg: [], Ter: [], Qua: [], Qui: [], Sex: [], Sab: [], Dom: [] };
+    for (const t of [...board.todo, ...board.doing, ...board.done]) {
       if (!match(t)) continue;
-      if (t.day_label && (DAY_LABELS as readonly string[]).includes(t.day_label)) {
+      if (t.column === "done") {
+        // concluída fica no lugar, marcada — sem coluna Feito
+        if (t.day_label && (DAY_LABELS as readonly string[]).includes(t.day_label)) g[t.day_label as Place].push(t);
+        else g.backlog.push(t);
+      } else if (t.column === "todo") {
+        g.backlog.push(t);
+      } else if (t.day_label && (DAY_LABELS as readonly string[]).includes(t.day_label)) {
         g[t.day_label as Place].push(t);
       } else {
         g[TRAY].push(t);
@@ -246,7 +252,7 @@ export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
         </button>
       </div>
       <p className="mb-3 text-sm text-[#141414]/60">
-        A IA preenche o <strong>Backlog</strong>. Arraste o card para os dias, clique para abrir.
+        A IA preenche o <strong>Backlog</strong>. Arraste o card para os dias, clique para abrir. Concluir marca no lugar.
       </p>
       {dropError && <p className="mb-2 text-sm text-red-600">{dropError}</p>}
       {usedCats.length > 0 && (
@@ -288,11 +294,10 @@ export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
           </button>
         </div>
         <div className="grid flex-1 grid-cols-1 content-start gap-3 overflow-y-auto pb-2 sm:grid-cols-2 xl:grid-cols-3">
-          <PlaceColumn place="backlog" tasks={groups.backlog} hint="A IA planeja aqui" onChanged={refresh} onOpen={setSelected} suppressClick={suppressClick} cats={cats} />
+          <PlaceColumn place="backlog" tasks={groups.backlog} hint="A IA planeja aqui" wide onChanged={refresh} onOpen={setSelected} suppressClick={suppressClick} cats={cats} />
           {DAY_LABELS.map((d) => (
             <PlaceColumn key={d} place={d as Place} tasks={groups[d as Place]} onChanged={refresh} onOpen={setSelected} suppressClick={suppressClick} cats={cats} />
           ))}
-          <PlaceColumn place="done" tasks={groups.done} hint="Concluídas" onChanged={refresh} onOpen={setSelected} suppressClick={suppressClick} cats={cats} />
         </div>
         <DragOverlay>
           {activeTask ? (

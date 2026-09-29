@@ -26,7 +26,7 @@ No separate /Notas page for v0. Week columns replace the old todo/doing/done tri
 ## 4. Page inventory
 - Hoje: today's habits checklist (3 inputs: nome + unidade + meta), today's doing tasks, quick note input + AI assist.
 - Chat: sessions list (lazy: "Nova conversa" opens a draft, session is created on first send — never duplicates).
-- Semana: Backlog (AI fills here via "Planejar com IA" → chat) + Seg–Dom day columns + Feito in a wrapping grid (no horizontal scroll). Whole card drags (6px threshold, click opens detail, keyboard path via detail day picker). ✓ on card toggles done (reopen returns to its day). Category filter chips. "A agendar" tray holds doing tasks without a day. Habit tasks auto-created per active day, self-healing if deleted. Drag sets column + day_label together (`place_task`).
+- Semana: Backlog em largura dupla (a IA despeja o plano aqui) + Seg–Dom em grade, sem scroll horizontal e sem coluna Feito — concluir marca ✓ no lugar (riscado), reabrir volta ao estado anterior. Whole card drags (6px threshold, click opens detail, keyboard path via detail day picker). Habit tasks sync both ways with the habit check. Category filter chips. "A agendar" tray holds doing tasks without a day. Habit tasks auto-created per active day, self-healing if deleted. Drag sets column + day_label together (`place_task`).
 - Task detail: .md note, day label, category selector (color tag).
 - Notas: search across task notes + daily notes, preview pane, "Nova nota" creates a backlog task and opens it.
 - Métricas: habit % per habit + overall, streaks, tasks done/created/carried, notes count, AI weekly summary.
