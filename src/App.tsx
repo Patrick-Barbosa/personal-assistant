@@ -84,7 +84,7 @@ export default function App() {
             <button
               key={t.id}
               onClick={() => setView(t.id)}
-              className={`flim-nav rounded-[8px] px-3 py-2 text-left ${
+              className={`flim-nav rounded-[8px] px-3 py-2 text-left transition-colors ${
                 view === t.id ? "bg-[#141414] text-[#ffffff]" : "text-[#141414] hover:bg-[#e9e9e9]"
               }`}
             >

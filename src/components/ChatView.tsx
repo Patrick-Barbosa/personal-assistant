@@ -165,12 +165,12 @@ export default function ChatView({ sessionId }: Props) {
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send()}
             placeholder="PERGUNTE SOBRE SUA SEMANA…"
-            className="flim-nav flex-1 rounded-[160px] border border-[#141414]/25 bg-[#ffffff] px-5 py-3 text-[#141414] outline-none placeholder:text-[#141414]/40"
+            className="flim-nav flex-1 rounded-[160px] border border-[#141414]/25 bg-[#ffffff] px-5 py-3 text-[#141414] outline-none transition-colors placeholder:text-[#141414]/40 focus:border-[#141414]"
           />
           <button
             onClick={() => send()}
             disabled={sending || !draft.trim()}
-            className="flim-nav rounded-[8px] bg-[#141414] px-5 py-2 text-[#ffffff] disabled:opacity-40"
+            className="flim-nav rounded-[8px] bg-[#141414] px-5 py-2 text-[#ffffff] transition-colors hover:bg-[#2a2a2a] disabled:opacity-40 disabled:hover:bg-[#141414]"
           >
             {sending ? "…" : "Enviar"}
           </button>

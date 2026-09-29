@@ -112,7 +112,20 @@ export default function MetricasView() {
           </button>
         </div>
         {resumo ? (
-          <p className="whitespace-pre-wrap text-sm text-[#141414]"><span className="bg-[#fecc33]">{resumo.split("\n")[0]}</span>{resumo.split("\n").slice(1).join("\n")}</p>
+          <div className="space-y-1.5 text-sm leading-relaxed text-[#141414]">
+            {resumo.split("\n").map((line, i) => {
+              const t = line.trim();
+              if (!t) return null;
+              const bullet = t.replace(/^([-*•]|\d+[.)])\s*/, "");
+              const isItem = bullet !== t;
+              return (
+                <p key={i} className="flex gap-2">
+                  {isItem && <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#30a81d]" />}
+                  <span>{isItem ? bullet : t}</span>
+                </p>
+              );
+            })}
+          </div>
         ) : (
           <p className="text-sm text-[#141414]/50">3 bullets: vitórias, perdidos, foco próxima semana.</p>
         )}

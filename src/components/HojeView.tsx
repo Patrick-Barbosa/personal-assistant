@@ -227,7 +227,7 @@ export default function HojeView({ onTasksChanged }: { onTasksChanged?: () => vo
             onChange={(e) => setNome(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addHabit()}
             placeholder="Nome do hábito… ex: Ler"
-            className="w-full rounded-[8px] border border-[#d9d9d9] bg-[#ffffff] px-3 py-2 text-sm text-[#141414] outline-none placeholder:text-[#141414]/40"
+            className="w-full rounded-[8px] border border-[#d9d9d9] bg-[#ffffff] px-3 py-2 text-sm text-[#141414] outline-none transition-colors placeholder:text-[#141414]/40 focus:border-[#141414]"
           />
           <div className="flex gap-2">
             <div className="flex rounded-[8px] border border-[#d9d9d9] bg-[#ffffff] p-0.5">
@@ -294,7 +294,7 @@ export default function HojeView({ onTasksChanged }: { onTasksChanged?: () => vo
             onChange={(e) => setNota(e.target.value)}
             rows={4}
             placeholder="Ideia rápida do dia…"
-            className="w-full rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-3 py-2 text-sm text-[#141414] outline-none placeholder:text-[#141414]/40"
+            className="w-full rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-3 py-2 text-sm text-[#141414] outline-none transition-colors placeholder:text-[#141414]/40 focus:border-[#141414]"
           />
         )}
         <div className="mt-2 flex gap-2">

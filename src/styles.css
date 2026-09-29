@@ -66,3 +66,8 @@ body {
   color: #30a81d;
   animation: flim-caret 0.9s infinite;
 }
+
+::selection {
+  background: #fecc33;
+  color: #141414;
+}

@@ -48,7 +48,7 @@ function Card({ task, showDay, onChanged, onOpen }: { task: Task; showDay: boole
     <div
       ref={setNodeRef}
       style={transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined}
-      className={`rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3 ${isDragging ? "opacity-50" : ""}`}
+      className={`rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3 transition-colors hover:border-[#141414]/40 ${isDragging ? "opacity-50" : ""}`}
     >
       <div
         {...listeners}
@@ -107,6 +107,11 @@ function PlaceColumn({ place, tasks, hint, onChanged, onOpen }: { place: Place; 
       </h2>
       {hint && <p className="mb-2 text-[11px] text-[#141414]/50">{hint}</p>}
       <div className="max-h-[240px] space-y-2 overflow-y-auto pr-0.5">
+        {tasks.length === 0 && (
+          <div className="rounded-[8px] border border-dashed border-[#d9d9d9] px-3 py-4 text-center text-xs text-[#141414]/40">
+            {place === "backlog" ? "Vazio — peça à IA" : place === "done" ? "Nada feito ainda" : "Arraste tarefas para cá"}
+          </div>
+        )}
         {tasks.map((t) => (
           <Card key={t.id} task={t} showDay={place === "backlog" || place === "done"} onChanged={onChanged} onOpen={() => onOpen(t)} />
         ))}
@@ -243,9 +248,9 @@ export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && add()}
             placeholder="NOVA TAREFA NO BACKLOG…"
-            className="flim-nav flex-1 rounded-[160px] border border-[#d9d9d9] bg-[#ffffff] px-5 py-3 text-[#141414] outline-none placeholder:text-[#141414]/40"
+            className="flim-nav flex-1 rounded-[160px] border border-[#d9d9d9] bg-[#ffffff] px-5 py-3 text-[#141414] outline-none transition-colors placeholder:text-[#141414]/40 focus:border-[#141414]"
           />
-          <button onClick={add} className="flim-nav rounded-[8px] bg-[#141414] px-5 py-2 text-[#ffffff]">
+          <button onClick={add} className="flim-nav rounded-[8px] bg-[#141414] px-5 py-2 text-[#ffffff] transition-colors hover:bg-[#2a2a2a]">
             Adicionar
           </button>
         </div>
