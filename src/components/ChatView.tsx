@@ -23,14 +23,39 @@ export default function ChatView({ sessionId }: Props) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const typeTimer = useRef<number | null>(null);
+  const [typingId, setTypingId] = useState<number | null>(null);
+
+  function stopTyping() {
+    if (typeTimer.current !== null) {
+      window.clearInterval(typeTimer.current);
+      typeTimer.current = null;
+    }
+    setTypingId(null);
+  }
+
+  function typewriter(id: number, full: string) {
+    stopTyping();
+    setTypingId(id);
+    let i = 0;
+    typeTimer.current = window.setInterval(() => {
+      i += 5;
+      const done = i >= full.length;
+      const shown = full.slice(0, i);
+      setMessages((m) => m.map((x) => (x.id === id ? { ...x, content: shown } : x)));
+      if (done) stopTyping();
+    }, 16);
+  }
 
   useEffect(() => {
+    stopTyping();
     setMessages([]);
     setError("");
     api
       .getMessages(sessionId)
       .then(setMessages)
       .catch((e) => setError(String(e.message ?? e)));
+    return stopTyping;
   }, [sessionId]);
 
   useEffect(() => {
@@ -47,7 +72,14 @@ export default function ChatView({ sessionId }: Props) {
     setMessages((m) => [...m, { id: tempId, session_id: sessionId, role: "user", content, created_at: new Date().toISOString() }]);
     try {
       const res = await api.sendChat(sessionId, content);
-      setMessages((m) => [...m.filter((x) => x.id !== tempId), res.user_message, res.assistant_message]);
+      const full = res.assistant_message.content;
+      setMessages((m) => [
+        ...m.filter((x) => x.id !== tempId),
+        res.user_message,
+        { ...res.assistant_message, content: "" },
+      ]);
+      setSending(false);
+      typewriter(res.assistant_message.id, full);
     } catch (e) {
       setMessages((m) => m.filter((x) => x.id !== tempId));
       setError(String(e instanceof Error ? e.message : e));
@@ -98,6 +130,7 @@ export default function ChatView({ sessionId }: Props) {
                 }`}
               >
                 {m.content}
+                {typingId === m.id && <span className="typing-caret">▍</span>}
               </div>
               {m.created_at && <span className="mt-1 text-[11px] text-[#141414]/50">{timeOf(m.created_at)}</span>}
             </div>
