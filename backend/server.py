@@ -239,7 +239,7 @@ class Handler(BaseHTTPRequestHandler):
             if m:
                 body = read_json(self)
                 try:
-                    return send_json(self, 200, habits.set_check(conn, m.group(1), body.get("data") or "", body.get("valor", 0)))
+                    return send_json(self, 200, habits.set_check(conn, m.group(1), body.get("data") or "", body))
                 except (ValueError, LookupError) as e:
                     return send_json(self, 400, {"error": str(e)})
             if path == "/api/hoje/nota":

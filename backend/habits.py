@@ -188,11 +188,12 @@ def ensure_habit_tasks(conn, data: str = "") -> int:
         ativos = [d for d in dias.split(",") if d]
         if ativos and label not in ativos:
             continue
-        if conn.execute("SELECT 1 FROM habit_tasks WHERE habit_id = ? AND data = ?", (h["id"], data)).fetchone():
+        link = conn.execute("SELECT task_id FROM habit_tasks WHERE habit_id = ? AND data = ?", (h["id"], data)).fetchone()
+        if link and conn.execute("SELECT 1 FROM tasks WHERE id = ?", (link["task_id"],)).fetchone():
             continue
         t = kanban.create_task(conn, h["nome"], "doing")
         conn.execute("UPDATE tasks SET day_label = ?, habit_id = ? WHERE id = ?", (label, h["id"], t["id"]))
-        conn.execute("INSERT OR IGNORE INTO habit_tasks (habit_id, data, task_id) VALUES (?, ?, ?)", (h["id"], data, t["id"]))
+        conn.execute("INSERT OR REPLACE INTO habit_tasks (habit_id, data, task_id) VALUES (?, ?, ?)", (h["id"], data, t["id"]))
         conn.commit()
         created += 1
     return created

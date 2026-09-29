@@ -33,6 +33,18 @@ function Card({ task, showDay, onChanged, onOpen, suppressClick, cats }: { task:
     onChanged();
   }
 
+  async function toggleDone(e: React.MouseEvent) {
+    e.stopPropagation();
+    const dest =
+      task.column === "done"
+        ? (task.day_label && (DAY_LABELS as readonly string[]).includes(task.day_label) ? task.day_label : "backlog")
+        : "done";
+    await api.placeTask(task.id, dest, 999);
+    onChanged();
+  }
+
+  const done = task.column === "done";
+
   function handleClick() {
     if (suppressClick()) return;
     onOpen();
@@ -65,10 +77,18 @@ function Card({ task, showDay, onChanged, onOpen, suppressClick, cats }: { task:
           </span>
         )}
       </div>
-      <p className="px-1 text-sm text-[#141414]">
+      <p className={`px-1 text-sm ${done ? "text-[#141414]/45 line-through" : "text-[#141414]"}`}>
         {task.titulo}
       </p>
       <div className="mt-2 flex gap-1 px-1">
+        <button
+          onClick={toggleDone}
+          aria-label={done ? `Reabrir ${task.titulo}` : `Concluir ${task.titulo}`}
+          title={done ? "Reabrir" : "Concluir"}
+          className={`flex h-6 w-6 items-center justify-center rounded-[6px] border text-sm transition-colors ${done ? "border-[#30a81d] bg-[#30a81d] text-[#ffffff]" : "border-[#141414]/30 text-transparent hover:border-[#30a81d] hover:text-[#30a81d]"}`}
+        >
+          ✓
+        </button>
         <button onClick={remove} aria-label={`Excluir tarefa ${task.titulo}`} className="ml-auto rounded px-2 py-0.5 text-xs text-[#141414]/40 transition-colors hover:text-red-600" title="Excluir">
           ✕
         </button>
