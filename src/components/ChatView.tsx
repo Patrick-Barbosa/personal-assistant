@@ -28,7 +28,7 @@ export default function ChatView({ sessionId }: Props) {
 
   function stopTyping() {
     if (typeTimer.current !== null) {
-      window.clearInterval(typeTimer.current);
+      window.clearTimeout(typeTimer.current);
       typeTimer.current = null;
     }
     setTypingId(null);
@@ -38,13 +38,23 @@ export default function ChatView({ sessionId }: Props) {
     stopTyping();
     setTypingId(id);
     let i = 0;
-    typeTimer.current = window.setInterval(() => {
-      i += 5;
-      const done = i >= full.length;
+    const tick = () => {
+      i += 1 + (Math.random() < 0.25 ? 1 : 0);
+      if (i > full.length) i = full.length;
       const shown = full.slice(0, i);
       setMessages((m) => m.map((x) => (x.id === id ? { ...x, content: shown } : x)));
-      if (done) stopTyping();
-    }, 16);
+      if (i >= full.length) {
+        stopTyping();
+        return;
+      }
+      const last = full[i - 1] ?? "";
+      let d = 18 + Math.random() * 46;
+      if (".?!…\n".includes(last)) d += 260 + Math.random() * 220;
+      else if (",;:—–".includes(last)) d += 100 + Math.random() * 120;
+      else if (last === " ") d += Math.random() * 30;
+      typeTimer.current = window.setTimeout(tick, d);
+    };
+    typeTimer.current = window.setTimeout(tick, 150);
   }
 
   useEffect(() => {
