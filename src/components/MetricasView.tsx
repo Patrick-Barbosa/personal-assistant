@@ -74,6 +74,8 @@ export default function MetricasView() {
         )}
       </section>
 
+      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+        <div className="space-y-4">
       <section className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-5">
         <h2 className="flim-nav mb-3 font-bold text-[#141414]">Semana por hábito</h2>
         {m.habitos.length === 0 ? (
@@ -121,11 +123,8 @@ export default function MetricasView() {
           </div>
         )}
       </section>
-
-      <p className="text-center text-xs tabular-nums text-[#141414]/40">
-        Média {m.geral.media_pct}% · {m.geral.cheios} hábito(s) 7/7 · Tarefas {m.tarefas.concluidas}/{m.tarefas.criadas} · {m.notas.total} notas
-      </p>
-
+        </div>
+        <div className="space-y-4">
       <section className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-5">
         <h2 className="flim-nav mb-2 font-bold text-[#141414]">Evolução (hábitos feitos/dia)</h2>
         <ResponsiveContainer width="100%" height={160}>
@@ -165,6 +164,30 @@ export default function MetricasView() {
           <p className="text-sm text-[#141414]/50">3 bullets: vitórias, perdidos, foco próxima semana.</p>
         )}
       </section>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 tabular-nums md:grid-cols-4">
+        <div className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3">
+          <p className="flim-nav text-[#141414]/50">Média hábitos</p>
+          <p className="text-xl font-bold text-[#141414]">{m.geral.media_pct}%</p>
+        </div>
+        <div className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3">
+          <p className="flim-nav text-[#141414]/50">Hábitos 7/7</p>
+          <p className="text-xl font-bold text-[#141414]">{m.geral.cheios}</p>
+        </div>
+        <div className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3">
+          <p className="flim-nav text-[#141414]/50">Tarefas</p>
+          <p className="text-sm font-bold text-[#141414]">
+            {m.tarefas.concluidas}/{m.tarefas.criadas} ({m.tarefas.pct}%)
+          </p>
+          <p className="text-xs text-[#141414]/50">carregadas: {m.tarefas.carregadas}</p>
+        </div>
+        <div className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3">
+          <p className="flim-nav text-[#141414]/50">Notas</p>
+          <p className="text-xl font-bold text-[#141414]">{m.notas.total}</p>
+        </div>
+      </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
