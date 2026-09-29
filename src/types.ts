@@ -46,6 +46,12 @@ export type WeekPlace = (typeof WEEK_PLACES)[number];
 export const TRAY = "agendar";
 export type Place = WeekPlace | typeof TRAY;
 
+export interface Category {
+  id: string;
+  nome: string;
+  cor: string;
+}
+
 export const CATEGORIES = [
   { id: "trabalho", label: "Trabalho", color: "#141414" },
   { id: "estudo", label: "Estudo", color: "#30a81d" },
@@ -54,13 +60,19 @@ export const CATEGORIES = [
   { id: "ideia", label: "Ideia", color: "#fecc33" },
 ] as const;
 
-export function categoryColor(cat: string): string {
+export function categoryColor(cat: string, cats?: Category[]): string {
+  const found = cats?.find((c) => c.id === cat);
+  if (found) return found.cor;
   return CATEGORIES.find((c) => c.id === cat)?.color ?? "#d9d9d9";
 }
 
-export function categoryLabel(cat: string): string {
+export function categoryLabel(cat: string, cats?: Category[]): string {
+  const found = cats?.find((c) => c.id === cat);
+  if (found) return found.nome;
   return CATEGORIES.find((c) => c.id === cat)?.label ?? cat;
 }
+
+export const CATEGORY_COLORS = ["#141414", "#30a81d", "#21935b", "#ff8400", "#fecc33", "#8a8a8a"];
 
 export interface Habit {
   id: string;
@@ -68,7 +80,9 @@ export interface Habit {
   tipo: "binary" | "numeric";
   unidade: string;
   meta: number;
+  dias: string;
   valor: number;
+  feito: number;
   created_at: string;
 }
 

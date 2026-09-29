@@ -7,10 +7,11 @@ Solo weekly operating system: talk to notes with AI, track daily habits, plan we
 
 ## 2. Locked decisions
 1. Notes: small notes, 1 .md note inside each task. Plus daily quick notes in Hoje.
-2. Habits: max 10. Binary (did / not did) + numeric with 3 inputs: habit + metric measured (unit label, ex: minutos, páginas, km) + target (ex: 20). A numeric day counts when valor >= meta. Unit and target editable later.
-3. Week planning: AI creates tasks to backlog only, user moves to days manually. Text + AI + confirm for v0. Voice = v2 (out of current web-only stack).
-4. Metrics: standard defaults now, user-configurable targets later.
-5. Tasks carry a category (trabalho/estudo/pessoal/saúde/ideia) shown as a color tag, filterable in Semana.
+2. Habits: max 10. Binary or target-based (nome + unidade + meta). Each day: explicit done toggle (fez / não fez) + optional amount input (desktop: type the number, no steppers). Active days selectable (ex: Ter+Qui); tasks auto-created in the day column every week. Empty days = every day.
+3. Week planning: AI creates tasks to backlog only, user moves to days manually. Text + AI + confirm for v0. Voice in chat = browser-native (mic dictation + spoken answers).
+4. Metrics: standard defaults now, user-configurable targets later. A numeric day counts when explicitly marked done.
+5. Tasks carry a user-editable category (seed: trabalho/estudo/pessoal/saúde/ideia; create + delete in Task detail). Notes inherit topics from categories; AI suggests topics for uncategorized notes with confirm.
+6. Chat renders Markdown, supports voice in/out, @task and #note mentions resolved as context for the turn.
 
 ## 3. Sitemap (v0)
 - /Hoje (new, daily entry)

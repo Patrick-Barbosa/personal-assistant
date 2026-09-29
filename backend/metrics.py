@@ -12,12 +12,12 @@ def week_range(data: str = "") -> dict:
     return {"inicio": days[0], "fim": days[-1], "dias": days}
 
 
-def _done_map(conn, habit_id: str, days: list[str]) -> dict[str, float]:
+def _done_map(conn, habit_id: str, days: list[str]) -> dict[str, tuple]:
     rows = conn.execute(
-        "SELECT data, valor FROM habit_checks WHERE habit_id = ? AND data BETWEEN ? AND ?",
+        "SELECT data, valor, feito FROM habit_checks WHERE habit_id = ? AND data BETWEEN ? AND ?",
         (habit_id, days[0], days[-1]),
     ).fetchall()
-    return {r["data"]: r["valor"] for r in rows}
+    return {r["data"]: (r["valor"], r["feito"] if "feito" in r.keys() else 0) for r in rows}
 
 
 def get_metricas(conn, data: str = "") -> dict:
@@ -33,15 +33,15 @@ def get_metricas(conn, data: str = "") -> dict:
         feitos = 0
         for h in hrows:
             hkeys = h.keys()
-            r = conn.execute("SELECT valor FROM habit_checks WHERE habit_id = ? AND data = ?", (h["id"], day)).fetchone()
-            if r and habits.cumprido(h["tipo"], r["valor"], h["meta"] if "meta" in hkeys else 0):
+            r = conn.execute("SELECT valor, feito FROM habit_checks WHERE habit_id = ? AND data = ?", (h["id"], day)).fetchone()
+            if r and habits.cumprido(h["tipo"], r["valor"], h["meta"] if "meta" in hkeys else 0, r["feito"] if "feito" in r.keys() else None):
                 feitos += 1
         serie.append({"data": day[5:], "feitos": feitos})
     for h in hrows:
         hkeys = h.keys()
         hmeta = h["meta"] if "meta" in hkeys else 0
         dm = _done_map(conn, h["id"], days)
-        done_days = sum(1 for d in days if habits.cumprido(h["tipo"], dm.get(d) or 0, hmeta))
+        done_days = sum(1 for d in days if habits.cumprido(h["tipo"], dm.get(d, (0, 0))[0], hmeta, dm.get(d, (0, 0))[1]))
         pct = round(done_days / 7 * 100)
         streak = 0
         d = datetime.strptime(anchor, "%Y-%m-%d").date()
@@ -49,8 +49,8 @@ def get_metricas(conn, data: str = "") -> dict:
             key = d.isoformat()
             if key < days[0]:
                 break
-            r = conn.execute("SELECT valor FROM habit_checks WHERE habit_id = ? AND data = ?", (h["id"], key)).fetchone()
-            if r and habits.cumprido(h["tipo"], r["valor"], hmeta):
+            r = conn.execute("SELECT valor, feito FROM habit_checks WHERE habit_id = ? AND data = ?", (h["id"], key)).fetchone()
+            if r and habits.cumprido(h["tipo"], r["valor"], hmeta, r["feito"] if "feito" in r.keys() else None):
                 streak += 1
                 d -= timedelta(days=1)
             else:

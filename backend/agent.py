@@ -192,7 +192,13 @@ def execute_tool(conn, name: str, args: dict) -> str:
             habs = habits.list_habits(conn, habits.today_str())
             if not habs:
                 return "(nenhum hábito)"
-            return "\n".join(f"- {h['nome']} ({h['tipo']}): {h['valor']}{h['unidade']}" for h in habs)
+            lines = []
+            for h in habs:
+                mark = "✓" if h["feito"] else "○"
+                extra = f" {h['valor']}{h['unidade']}" if h["tipo"] == "numeric" else ""
+                meta = f" (meta {h['meta']}{h['unidade']})" if h["tipo"] == "numeric" and h["meta"] else ""
+                lines.append(f"- {mark} {h['nome']}{extra}{meta}")
+            return "\n".join(lines)
         if name == "ler_nota_tarefa":
             key = args.get("id_ou_titulo", "")
             row = conn.execute("SELECT titulo, note_md FROM tasks WHERE id = ?", (key,)).fetchone()
@@ -211,12 +217,14 @@ def execute_tool(conn, name: str, args: dict) -> str:
         return f"Erro em {name}: {e}"
 
 
-def run_turn(session_id: str, user_input: str) -> str:
+def run_turn(session_id: str, user_input: str, refs: str = "") -> str:
     conn = db.connect()
     try:
         custom = conn.execute("SELECT value FROM settings WHERE key = 'custom_instructions'").fetchone()
         system = SYSTEM_PROMPT + (f"\n\n[INSTRUÇÕES DO USUÁRIO]\n{custom['value']}" if custom and custom["value"] else "")
         system += "\n\n[CONTEXTO]\n" + build_context(conn)
+        if refs:
+            user_input = user_input + "\n\n[REFERÊNCIAS MENCIONADAS]\n" + refs[:6000]
         msgs = conn.execute(
             "SELECT role, content FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT 20", (session_id,)
         ).fetchall()

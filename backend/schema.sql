@@ -47,14 +47,29 @@ CREATE TABLE IF NOT EXISTS habits (
     tipo TEXT NOT NULL DEFAULT 'binary',
     unidade TEXT NOT NULL DEFAULT '',
     meta REAL NOT NULL DEFAULT 0,
+    dias TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS habit_checks (
     habit_id TEXT NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
     data TEXT NOT NULL,
-    valor REAL NOT NULL DEFAULT 1,
+    valor REAL NOT NULL DEFAULT 0,
+    feito INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (habit_id, data)
+);
+
+CREATE TABLE IF NOT EXISTS habit_tasks (
+    habit_id TEXT NOT NULL,
+    data TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    PRIMARY KEY (habit_id, data)
+);
+
+CREATE TABLE IF NOT EXISTS categories (
+    id TEXT PRIMARY KEY,
+    nome TEXT NOT NULL,
+    cor TEXT NOT NULL DEFAULT '#141414'
 );
 
 CREATE TABLE IF NOT EXISTS daily_notes (

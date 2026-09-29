@@ -25,7 +25,7 @@ def _check_data(data: str) -> str:
     return data
 
 
-def habit_to_dict(row, valor: float = 0) -> dict:
+def habit_to_dict(row, valor: float = 0, feito: int = 0) -> dict:
     keys = row.keys()
     return {
         "id": row["id"],
@@ -33,13 +33,17 @@ def habit_to_dict(row, valor: float = 0) -> dict:
         "tipo": row["tipo"],
         "unidade": row["unidade"],
         "meta": row["meta"] if "meta" in keys else 0,
+        "dias": row["dias"] if "dias" in keys else "",
         "valor": valor,
+        "feito": feito,
         "created_at": row["created_at"],
     }
 
 
-def cumprido(tipo: str, valor: float, meta: float) -> bool:
-    """Dia conta como feito? Numérico com meta exige atingir a meta."""
+def cumprido(tipo: str, valor: float, meta: float, feito=None) -> bool:
+    """Dia conta como feito? Flag explícita manda; sem ela, regra antiga."""
+    if feito is not None:
+        return bool(feito)
     if (valor or 0) <= 0:
         return False
     if tipo == "numeric" and (meta or 0) > 0:
@@ -50,11 +54,21 @@ def cumprido(tipo: str, valor: float, meta: float) -> bool:
 def list_habits(conn, data: str = "") -> list[dict]:
     data = _check_data(data)
     rows = conn.execute("SELECT * FROM habits ORDER BY created_at, id").fetchall()
-    checks = {r["habit_id"]: r["valor"] for r in conn.execute("SELECT * FROM habit_checks WHERE data = ?", (data,)).fetchall()}
-    return [habit_to_dict(r, checks.get(r["id"], 0)) for r in rows]
+    checks = {r["habit_id"]: (r["valor"], r["feito"] if "feito" in r.keys() else 0)
+              for r in conn.execute("SELECT * FROM habit_checks WHERE data = ?", (data,)).fetchall()}
+    return [habit_to_dict(r, *checks.get(r["id"], (0, 0))) for r in rows]
 
 
-def create_habit(conn, nome: str, tipo: str = "binary", unidade: str = "", meta: float = 0) -> dict:
+def _norm_dias(dias) -> str:
+    if isinstance(dias, str):
+        parts = [p.strip() for p in dias.split(",")]
+    else:
+        parts = list(dias or [])
+    valid = ("Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom")
+    return ",".join(p for p in parts if p in valid)
+
+
+def create_habit(conn, nome: str, tipo: str = "binary", unidade: str = "", meta: float = 0, dias="") -> dict:
     nome = (nome or "").strip()
     if not nome:
         raise ValueError("nome vazio")
@@ -72,11 +86,11 @@ def create_habit(conn, nome: str, tipo: str = "binary", unidade: str = "", meta:
         raise ValueError("máximo de 10 hábitos")
     hid = f"h_{uuid.uuid4().hex[:12]}"
     conn.execute(
-        "INSERT INTO habits (id, nome, tipo, unidade, meta, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (hid, nome, tipo, (unidade or "").strip(), meta, now_iso()),
+        "INSERT INTO habits (id, nome, tipo, unidade, meta, dias, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (hid, nome, tipo, (unidade or "").strip(), meta, _norm_dias(dias), now_iso()),
     )
     conn.commit()
-    return habit_to_dict(conn.execute("SELECT * FROM habits WHERE id = ?", (hid,)).fetchone(), 0)
+    return habit_to_dict(conn.execute("SELECT * FROM habits WHERE id = ?", (hid,)).fetchone(), 0, 0)
 
 
 def delete_habit(conn, habit_id: str) -> None:
@@ -106,6 +120,8 @@ def update_habit(conn, habit_id: str, patch: dict) -> dict:
         if meta < 0:
             raise ValueError("meta não pode ser negativa")
         updates["meta"] = meta
+    if "dias" in patch:
+        updates["dias"] = _norm_dias(patch.get("dias"))
     if updates:
         sets = ", ".join(f"{k} = ?" for k in updates)
         conn.execute(f"UPDATE habits SET {sets} WHERE id = ?", (*updates.values(), habit_id))
@@ -119,26 +135,67 @@ def habits_today(conn) -> dict[str, float]:
     return {r["habit_id"]: r["valor"] for r in rows}
 
 
-def set_check(conn, habit_id: str, data: str, valor: float) -> dict:
+def set_check(conn, habit_id: str, data: str, patch) -> dict:
+    """patch: número (legado) ou dict {valor?, feito?}. Valor>0 liga o feito, salvo ordem explícita."""
+    if not isinstance(patch, dict):
+        patch = {"valor": patch}
     data = _check_data(data)
     row = conn.execute("SELECT * FROM habits WHERE id = ?", (habit_id,)).fetchone()
     if not row:
         raise LookupError(f"hábito não encontrado: {habit_id}")
-    try:
-        valor = float(valor)
-    except (TypeError, ValueError):
-        raise ValueError("valor deve ser número")
-    if row["tipo"] == "binary":
-        valor = 1 if valor > 0 else 0
-    elif valor < 0:
-        raise ValueError("valor não pode ser negativo")
+    cur = conn.execute("SELECT valor, feito FROM habit_checks WHERE habit_id = ? AND data = ?", (habit_id, data)).fetchone()
+    valor = cur["valor"] if cur else 0
+    feito = cur["feito"] if cur and "feito" in cur.keys() else 0
+    if "valor" in patch:
+        try:
+            valor = float(patch.get("valor") or 0)
+        except (TypeError, ValueError):
+            raise ValueError("valor deve ser número")
+        if row["tipo"] == "binary":
+            valor = 1 if valor > 0 else 0
+        elif valor < 0:
+            raise ValueError("valor não pode ser negativo")
+        if valor > 0 and "feito" not in patch:
+            feito = 1
+    if "feito" in patch:
+        feito = 1 if patch.get("feito") else 0
+        if row["tipo"] == "binary":
+            valor = feito
     conn.execute(
-        "INSERT INTO habit_checks (habit_id, data, valor) VALUES (?, ?, ?) "
-        "ON CONFLICT(habit_id, data) DO UPDATE SET valor = excluded.valor",
-        (habit_id, data, valor),
+        "INSERT INTO habit_checks (habit_id, data, valor, feito) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(habit_id, data) DO UPDATE SET valor = excluded.valor, feito = excluded.feito",
+        (habit_id, data, valor, feito),
     )
     conn.commit()
-    return habit_to_dict(row, valor)
+    return habit_to_dict(row, valor, feito)
+
+
+def weekday_label(data: str) -> str:
+    dias = ("Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom")
+    return dias[datetime.strptime(_check_data(data), "%Y-%m-%d").weekday()]
+
+
+def ensure_habit_tasks(conn, data: str = "") -> int:
+    """Garante 1 tarefa por hábito ativo no dia (via mapa habit_tasks). Retorna criadas."""
+    from . import kanban
+
+    conn.execute("CREATE TABLE IF NOT EXISTS habit_tasks (habit_id TEXT NOT NULL, data TEXT NOT NULL, task_id TEXT NOT NULL, PRIMARY KEY (habit_id, data))")
+    data = _check_data(data)
+    label = weekday_label(data)
+    created = 0
+    for h in conn.execute("SELECT * FROM habits").fetchall():
+        dias = (h["dias"] if "dias" in h.keys() else "") or ""
+        ativos = [d for d in dias.split(",") if d]
+        if ativos and label not in ativos:
+            continue
+        if conn.execute("SELECT 1 FROM habit_tasks WHERE habit_id = ? AND data = ?", (h["id"], data)).fetchone():
+            continue
+        t = kanban.create_task(conn, h["nome"], "doing")
+        conn.execute("UPDATE tasks SET day_label = ?, habit_id = ? WHERE id = ?", (label, h["id"], t["id"]))
+        conn.execute("INSERT OR IGNORE INTO habit_tasks (habit_id, data, task_id) VALUES (?, ?, ?)", (h["id"], data, t["id"]))
+        conn.commit()
+        created += 1
+    return created
 
 
 def get_daily_note(conn, data: str) -> dict | None:

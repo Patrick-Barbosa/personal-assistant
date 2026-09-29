@@ -4,7 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { diffLines } from "diff";
 import { api } from "../api";
-import { CATEGORIES, DAY_LABELS, type Task } from "../types";
+import { CATEGORY_COLORS, DAY_LABELS, type Category, type Task } from "../types";
 
 interface Props {
   task: Task | null;
@@ -23,6 +23,9 @@ export default function TaskDetail({ task, onClose, onSaved }: Props) {
   const [mode, setMode] = useState<Mode>("editar");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [cats, setCats] = useState<Category[]>([]);
+  const [newCat, setNewCat] = useState("");
+  const [newColor, setNewColor] = useState(CATEGORY_COLORS[0]);
 
   useEffect(() => {
     if (task) {
@@ -33,6 +36,8 @@ export default function TaskDetail({ task, onClose, onSaved }: Props) {
       setSavedNote(task.note_md ?? "");
       setMode("editar");
       setError("");
+      setNewCat("");
+      api.listCategorias().then(setCats).catch(() => {});
     }
   }, [task]);
 
@@ -109,23 +114,65 @@ export default function TaskDetail({ task, onClose, onSaved }: Props) {
               </div>
 
               <label className="flim-nav mb-1 block text-[#141414]/60">Categoria</label>
-              <div className="mb-4 flex flex-wrap gap-1">
+              <div className="mb-2 flex flex-wrap gap-1">
                 <button
                   onClick={() => setCategoria("")}
-                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${categoria === "" ? "border-[#141414] bg-[#141414] text-[#ffffff]" : "border-[#d9d9d9] text-[#141414]"}`}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${categoria === "" ? "border-[#141414] bg-[#141414] text-[#ffffff]" : "border-[#d9d9d9] text-[#141414] hover:border-[#141414]/40"}`}
                 >
                   Sem categoria
                 </button>
-                {CATEGORIES.map((c) => (
-                  <button
+                {cats.map((c) => (
+                  <span
                     key={c.id}
-                    onClick={() => setCategoria(c.id)}
-                    className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${categoria === c.id ? "border-[#141414] bg-[#141414] text-[#ffffff]" : "border-[#d9d9d9] text-[#141414]"}`}
+                    className={`flex items-center gap-1.5 rounded-full border py-1 pl-3 pr-1.5 text-xs font-semibold ${categoria === c.id ? "border-[#141414] bg-[#141414] text-[#ffffff]" : "border-[#d9d9d9] text-[#141414]"}`}
                   >
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c.color }} />
-                    {c.label}
-                  </button>
+                    <button onClick={() => setCategoria(c.id)} className="flex items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c.cor }} />
+                      {c.nome}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await api.deleteCategoria(c.id);
+                        if (categoria === c.id) setCategoria("");
+                        setCats(await api.listCategorias());
+                        onSaved();
+                      }}
+                      aria-label={`Excluir categoria ${c.nome}`}
+                      className="rounded-full px-1 opacity-40 hover:opacity-100 hover:text-red-600"
+                      title="Excluir categoria"
+                    >
+                      ✕
+                    </button>
+                  </span>
                 ))}
+              </div>
+              <div className="mb-4 flex items-center gap-1.5">
+                <input
+                  value={newCat}
+                  onChange={(e) => setNewCat(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key === "Enter" && newCat.trim()) {
+                      const c = await api.createCategoria(newCat.trim(), newColor);
+                      setCats(await api.listCategorias());
+                      setCategoria(c.id);
+                      setNewCat("");
+                    }
+                  }}
+                  placeholder="Nova categoria…"
+                  aria-label="Nome da nova categoria"
+                  className="w-36 rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-2 py-1 text-xs outline-none focus:border-[#141414]"
+                />
+                <div className="flex gap-1">
+                  {CATEGORY_COLORS.map((cor) => (
+                    <button
+                      key={cor}
+                      onClick={() => setNewColor(cor)}
+                      aria-label={`Cor ${cor}`}
+                      className={`h-5 w-5 rounded-full border ${newColor === cor ? "border-[#141414] ring-1 ring-[#141414]" : "border-[#d9d9d9]"}`}
+                      style={{ backgroundColor: cor }}
+                    />
+                  ))}
+                </div>
               </div>
 
               <div className="mb-2 flex gap-1">

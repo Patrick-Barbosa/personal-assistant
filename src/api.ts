@@ -1,4 +1,4 @@
-import type { Board, Column, DailyNote, Habit, Hoje, Message, Metricas, Notas, Session, Task } from "./types";
+import type { Board, Category, Column, DailyNote, Habit, Hoje, Message, Metricas, Notas, Session, Task } from "./types";
 
 const BASE = "http://127.0.0.1:8000";
 
@@ -27,11 +27,11 @@ export const api = {
   deleteSession: (id: string) => request<{ ok: boolean }>("DELETE", `/api/sessions/${id}`),
   getMessages: (sessionId: string) => request<Message[]>("GET", `/api/sessions/${sessionId}/messages`),
 
-  sendChat: (sessionId: string, content: string) =>
+  sendChat: (sessionId: string, content: string, refs?: { kind: string; id: string }[]) =>
     request<{ user_message: Message; assistant_message: Message; updated_session_title: string | null }>(
       "POST",
       "/api/chat",
-      { session_id: sessionId, content },
+      { session_id: sessionId, content, refs },
     ),
 
   getBoard: () => request<Board>("GET", "/api/board"),
@@ -45,13 +45,18 @@ export const api = {
   deleteTask: (id: string) => request<{ ok: boolean }>("DELETE", `/api/tasks/${id}`),
 
   listHabits: (data?: string) => request<Habit[]>("GET", data ? `/api/habits?data=${data}` : "/api/habits"),
-  createHabit: (nome: string, tipo: "binary" | "numeric" = "binary", unidade = "", meta = 0) =>
-    request<Habit>("POST", "/api/habits", { nome, tipo, unidade, meta }),
+  createHabit: (nome: string, tipo: "binary" | "numeric" = "binary", unidade = "", meta = 0, dias = "") =>
+    request<Habit>("POST", "/api/habits", { nome, tipo, unidade, meta, dias }),
   deleteHabit: (id: string) => request<{ ok: boolean }>("DELETE", `/api/habits/${id}`),
-  checkHabit: (id: string, valor: number, data?: string) =>
-    request<Habit>("POST", `/api/habits/${id}/check`, { valor, data }),
-  updateHabit: (id: string, patch: { nome?: string; unidade?: string; meta?: number }) =>
+  checkHabit: (id: string, patch: { valor?: number; feito?: number }, data?: string) =>
+    request<Habit>("POST", `/api/habits/${id}/check`, { ...patch, data }),
+  updateHabit: (id: string, patch: { nome?: string; unidade?: string; meta?: number; dias?: string }) =>
     request<Habit>("PATCH", `/api/habits/${id}`, patch),
+  listCategorias: () => request<Category[]>("GET", "/api/categorias"),
+  createCategoria: (nome: string, cor = "#141414") =>
+    request<Category>("POST", "/api/categorias", { nome, cor }),
+  deleteCategoria: (id: string) => request<{ ok: boolean }>("DELETE", `/api/categorias/${id}`),
+  organizarNotas: () => request<{ sugestoes: { id: string; categoria: string }[] }>("POST", "/api/notas/organizar", {}),
   getHoje: (data?: string) => request<Hoje>("GET", data ? `/api/hoje?data=${data}` : "/api/hoje"),
   saveNota: (conteudo: string, data?: string) =>
     request<DailyNote>("POST", "/api/hoje/nota", { conteudo, data }),

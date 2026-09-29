@@ -24,15 +24,18 @@ def init_db() -> None:
             conn.executescript(f.read())
         _migrate_tasks(conn)
         _migrate_habits_legacy(conn)
+        _seed_categories(conn)
         conn.commit()
     finally:
         conn.close()
 
 
-def _ensure_column(conn, table: str, column: str, ddl: str) -> None:
+def _ensure_column(conn, table: str, column: str, ddl: str) -> bool:
     cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
     if column not in cols:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+        return True
+    return False
 
 
 def _migrate_tasks(conn) -> None:
@@ -42,6 +45,18 @@ def _migrate_tasks(conn) -> None:
     _ensure_column(conn, "tasks", "habit_id", "TEXT")
     _ensure_column(conn, "tasks", "categoria", "TEXT NOT NULL DEFAULT ''")
     _ensure_column(conn, "habits", "meta", "REAL NOT NULL DEFAULT 0")
+    _ensure_column(conn, "habits", "dias", "TEXT NOT NULL DEFAULT ''")
+    if _ensure_column(conn, "habit_checks", "feito", "INTEGER NOT NULL DEFAULT 0"):
+        conn.execute("UPDATE habit_checks SET feito = CASE WHEN valor > 0 THEN 1 ELSE 0 END")
+
+
+def _seed_categories(conn) -> None:
+    conn.execute("CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY, nome TEXT NOT NULL, cor TEXT NOT NULL DEFAULT '#141414')")
+    if conn.execute("SELECT COUNT(*) AS c FROM categories").fetchone()["c"] == 0:
+        presets = [("trabalho", "Trabalho", "#141414"), ("estudo", "Estudo", "#30a81d"), ("pessoal", "Pessoal", "#ff8400"),
+                   ("saude", "Saúde", "#21935b"), ("ideia", "Ideia", "#fecc33")]
+        for cid, nome, cor in presets:
+            conn.execute("INSERT OR IGNORE INTO categories (id, nome, cor) VALUES (?, ?, ?)", (cid, nome, cor))
 
 
 def _migrate_habits_legacy(conn) -> None:
