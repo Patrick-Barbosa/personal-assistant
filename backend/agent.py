@@ -187,6 +187,7 @@ def execute_tool(conn, name: str, args: dict) -> str:
             if not row:
                 return f"Tarefa não encontrada: {key}"
             t = kanban.move_task(conn, row["id"], args.get("coluna", "todo"))
+            habits.sync_task_done(conn, row["id"], t["column"] == "done")
             return f"Tarefa movida: {t['titulo']} -> {t['column']}"
         if name == "listar_habitos":
             habs = habits.list_habits(conn, habits.today_str())

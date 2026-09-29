@@ -167,6 +167,15 @@ def set_check(conn, habit_id: str, data: str, patch) -> dict:
         (habit_id, data, valor, feito),
     )
     conn.commit()
+    if "feito" in patch:
+        from . import kanban
+
+        link = conn.execute("SELECT task_id FROM habit_tasks WHERE habit_id = ? AND data = ?", (habit_id, data)).fetchone()
+        if link:
+            try:
+                kanban.move_task(conn, link["task_id"], "done" if feito else "doing", 999)
+            except (ValueError, LookupError):
+                pass
     return habit_to_dict(row, valor, feito)
 
 
@@ -205,6 +214,17 @@ def ensure_habit_tasks(conn, data: str = "") -> int:
             conn.commit()
             created += 1
     return created
+
+
+def sync_task_done(conn, task_id: str, done: bool) -> None:
+    """Task com habit_id concluída/reaberta espelha o feito do hábito (via mapa habit_tasks)."""
+    row = conn.execute("SELECT habit_id FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    if not row or not row["habit_id"]:
+        return
+    link = conn.execute("SELECT data FROM habit_tasks WHERE task_id = ?", (task_id,)).fetchone()
+    if not link:
+        return
+    set_check(conn, row["habit_id"], link["data"], {"feito": 1 if done else 0})
 
 
 def get_daily_note(conn, data: str) -> dict | None:

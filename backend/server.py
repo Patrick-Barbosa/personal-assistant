@@ -212,14 +212,18 @@ class Handler(BaseHTTPRequestHandler):
             if m:
                 body = read_json(self)
                 try:
-                    return send_json(self, 200, kanban.move_task(conn, m.group(1), body.get("column", "todo"), int(body.get("index") or 0)))
+                    t = kanban.move_task(conn, m.group(1), body.get("column", "todo"), int(body.get("index") or 0))
+                    habits.sync_task_done(conn, m.group(1), t["column"] == "done")
+                    return send_json(self, 200, t)
                 except (ValueError, LookupError) as e:
                     return send_json(self, 400, {"error": str(e)})
             m = re.fullmatch(r"/api/tasks/([^/]+)/place", path)
             if m:
                 body = read_json(self)
                 try:
-                    return send_json(self, 200, kanban.place_task(conn, m.group(1), body.get("dest") or "backlog", int(body.get("index") or 0)))
+                    t = kanban.place_task(conn, m.group(1), body.get("dest") or "backlog", int(body.get("index") or 0))
+                    habits.sync_task_done(conn, m.group(1), t["column"] == "done")
+                    return send_json(self, 200, t)
                 except (ValueError, LookupError) as e:
                     return send_json(self, 400, {"error": str(e)})
             if path == "/api/habits":
