@@ -175,27 +175,35 @@ def weekday_label(data: str) -> str:
     return dias[datetime.strptime(_check_data(data), "%Y-%m-%d").weekday()]
 
 
+def week_days(data: str = "") -> list[str]:
+    from datetime import timedelta
+
+    base = datetime.strptime(_check_data(data), "%Y-%m-%d").date()
+    start = base - timedelta(days=base.weekday())
+    return [(start + timedelta(days=i)).isoformat() for i in range(7)]
+
+
 def ensure_habit_tasks(conn, data: str = "") -> int:
-    """Garante 1 tarefa por hábito ativo no dia (via mapa habit_tasks). Retorna criadas."""
+    """Garante 1 tarefa por hábito ativo em cada dia da semana (via mapa habit_tasks)."""
     from . import kanban
 
     conn.execute("CREATE TABLE IF NOT EXISTS habit_tasks (habit_id TEXT NOT NULL, data TEXT NOT NULL, task_id TEXT NOT NULL, PRIMARY KEY (habit_id, data))")
-    data = _check_data(data)
-    label = weekday_label(data)
     created = 0
-    for h in conn.execute("SELECT * FROM habits").fetchall():
-        dias = (h["dias"] if "dias" in h.keys() else "") or ""
-        ativos = [d for d in dias.split(",") if d]
-        if ativos and label not in ativos:
-            continue
-        link = conn.execute("SELECT task_id FROM habit_tasks WHERE habit_id = ? AND data = ?", (h["id"], data)).fetchone()
-        if link and conn.execute("SELECT 1 FROM tasks WHERE id = ?", (link["task_id"],)).fetchone():
-            continue
-        t = kanban.create_task(conn, h["nome"], "doing")
-        conn.execute("UPDATE tasks SET day_label = ?, habit_id = ? WHERE id = ?", (label, h["id"], t["id"]))
-        conn.execute("INSERT OR REPLACE INTO habit_tasks (habit_id, data, task_id) VALUES (?, ?, ?)", (h["id"], data, t["id"]))
-        conn.commit()
-        created += 1
+    for day in week_days(data):
+        label = weekday_label(day)
+        for h in conn.execute("SELECT * FROM habits").fetchall():
+            dias = (h["dias"] if "dias" in h.keys() else "") or ""
+            ativos = [d for d in dias.split(",") if d]
+            if ativos and label not in ativos:
+                continue
+            link = conn.execute("SELECT task_id FROM habit_tasks WHERE habit_id = ? AND data = ?", (h["id"], day)).fetchone()
+            if link and conn.execute("SELECT 1 FROM tasks WHERE id = ?", (link["task_id"],)).fetchone():
+                continue
+            t = kanban.create_task(conn, h["nome"], "doing")
+            conn.execute("UPDATE tasks SET day_label = ?, habit_id = ? WHERE id = ?", (label, h["id"], t["id"]))
+            conn.execute("INSERT OR REPLACE INTO habit_tasks (habit_id, data, task_id) VALUES (?, ?, ?)", (h["id"], day, t["id"]))
+            conn.commit()
+            created += 1
     return created
 
 

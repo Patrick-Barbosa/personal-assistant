@@ -25,6 +25,7 @@ def init_db() -> None:
         _migrate_tasks(conn)
         _migrate_habits_legacy(conn)
         _seed_categories(conn)
+        _fix_checks_fk(conn)
         conn.commit()
     finally:
         conn.close()
@@ -80,6 +81,36 @@ def _migrate_habits_legacy(conn) -> None:
             "INSERT OR IGNORE INTO habits (id, nome, tipo, unidade, meta, created_at) VALUES (?, ?, ?, ?, ?, ?)",
             (get("id"), get("nome", get("titulo", "Hábito")), tipo, get("unidade"), get("meta", 0) or 0, get("created_at", "")),
         )
+
+
+def _fix_checks_fk(conn) -> None:
+    """Legacy habit_checks may reference habits_legacy. Rebuild pointing at habits."""
+    try:
+        fks = conn.execute("PRAGMA foreign_key_list('habit_checks')").fetchall()
+    except Exception:
+        return
+    if not fks or all(r["table"] == "habits" for r in fks):
+        return
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        rows = conn.execute("SELECT habit_id, data, valor, feito FROM habit_checks").fetchall()
+        conn.execute("ALTER TABLE habit_checks RENAME TO habit_checks_legacy")
+        conn.execute(
+            "CREATE TABLE habit_checks (habit_id TEXT NOT NULL REFERENCES habits(id) ON DELETE CASCADE, "
+            "data TEXT NOT NULL, valor REAL NOT NULL DEFAULT 0, feito INTEGER NOT NULL DEFAULT 0, "
+            "PRIMARY KEY (habit_id, data))"
+        )
+        for r in rows:
+            keys = r.keys()
+            feito = r["feito"] if "feito" in keys else (1 if (r["valor"] or 0) > 0 else 0)
+            conn.execute(
+                "INSERT OR IGNORE INTO habit_checks (habit_id, data, valor, feito) "
+                "SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM habits WHERE id = ?)",
+                (r["habit_id"], r["data"], r["valor"] or 0, feito, r["habit_id"]),
+            )
+        conn.execute("DROP TABLE habit_checks_legacy")
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
 
 
 def rows_to_dicts(cursor) -> list[dict]:
