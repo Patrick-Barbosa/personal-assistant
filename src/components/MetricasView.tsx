@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Flame, Shield } from "lucide-react";
 import { addDays, format, parseISO } from "date-fns";
 import { api } from "../api";
@@ -106,6 +105,9 @@ export default function MetricasView() {
                       <Flame size={12} aria-hidden="true" />{h.streak}
                     </span>
                   )}
+                  <span className="ml-auto text-xs tabular-nums text-[#141414]/50">
+                    {h.pct}%{h.tipo === "numeric" && h.meta > 0 && ` · meta ${h.meta}${h.unidade ? ` ${h.unidade}` : ""}`}
+                  </span>
                 </div>
                 {h.marco && (
                   <p className="ml-28 mt-1 inline-block rounded-[25px] bg-[#fecc33] px-2 py-0.5 text-[11px] font-bold text-[#141414]">
@@ -119,67 +121,9 @@ export default function MetricasView() {
         )}
       </section>
 
-      <div className="grid grid-cols-2 gap-2 tabular-nums md:grid-cols-4">
-        <div className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-4">
-          <p className="flim-nav text-[#141414]/50">Média hábitos</p>
-          <p className="text-2xl font-bold text-[#141414]">{m.geral.media_pct}%</p>
-        </div>
-        <div className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-4">
-          <p className="flim-nav text-[#141414]/50">Hábitos 7/7</p>
-          <p className="text-2xl font-bold text-[#141414]">{m.geral.cheios}</p>
-        </div>
-        <div className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-4">
-          <p className="flim-nav text-[#141414]/50">Tarefas</p>
-          <p className="text-sm text-[#141414]">
-            {m.tarefas.concluidas}/{m.tarefas.criadas} ({m.tarefas.pct}%)
-          </p>
-          <p className="text-xs text-[#141414]/50">carregadas: {m.tarefas.carregadas}</p>
-        </div>
-        <div className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-4">
-          <p className="flim-nav text-[#141414]/50">Notas</p>
-          <p className="text-2xl font-bold text-[#141414]">{m.notas.total}</p>
-        </div>
-      </div>
-
-      <section className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-5">
-        <h2 className="flim-nav mb-2 font-bold text-[#141414]">% por hábito</h2>
-        {m.habitos.length === 0 ? (
-          <p className="text-sm text-[#141414]/50">Sem hábitos. Crie no Hoje.</p>
-        ) : (
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={m.habitos}>
-              <CartesianGrid stroke="#d9d9d9" strokeDasharray="3 3" />
-              <XAxis dataKey="nome" tick={{ fill: "#141414", fontSize: 11 }} />
-              <YAxis domain={[0, 100]} tick={{ fill: "#141414", fontSize: 11 }} />
-              <Tooltip />
-              <Bar dataKey="pct" fill="#141414" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </section>
-
-      <section className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-5">
-        <h2 className="flim-nav mb-2 font-bold text-[#141414]">Evolução (hábitos feitos/dia)</h2>
-        <ResponsiveContainer width="100%" height={160}>
-          <LineChart data={m.serie}>
-            <CartesianGrid stroke="#d9d9d9" strokeDasharray="3 3" />
-            <XAxis dataKey="data" tick={{ fill: "#141414", fontSize: 11 }} />
-            <YAxis allowDecimals={false} tick={{ fill: "#141414", fontSize: 11 }} />
-            <Tooltip />
-            <Line type="monotone" dataKey="feitos" stroke="#141414" strokeWidth={2} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
-        {m.habitos.length > 0 && (
-          <div className="mt-2 space-y-1">
-            {m.habitos.map((h) => (
-              <p key={h.id} className="text-xs text-[#141414]/60">
-                {h.nome}: {h.done_days}/7 dias, streak {h.streak}
-                {h.tipo === "numeric" && h.meta > 0 && ` · meta ${h.meta}${h.unidade ? ` ${h.unidade}` : ""}`}
-              </p>
-            ))}
-          </div>
-        )}
-      </section>
+      <p className="text-center text-xs tabular-nums text-[#141414]/40">
+        Média {m.geral.media_pct}% · {m.geral.cheios} hábito(s) 7/7 · Tarefas {m.tarefas.concluidas}/{m.tarefas.criadas} · {m.notas.total} notas
+      </p>
 
       <section className="rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-5">
         <div className="mb-2 flex items-center gap-2">
