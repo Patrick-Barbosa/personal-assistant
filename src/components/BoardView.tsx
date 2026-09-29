@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { DndContext, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
+import { useMemo, useRef, useState } from "react";
+import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { GripVertical, Sparkles, StickyNote } from "lucide-react";
 import { api } from "../api";
 import { DAY_LABELS, TRAY, WEEK_PLACES, categoryColor, categoryLabel, type Board, type Place, type Task } from "../types";
@@ -24,39 +24,31 @@ const PLACE_LABEL: Record<Place, string> = {
   [TRAY]: "A agendar",
 };
 
-function Card({ task, showDay, onChanged, onOpen }: { task: Task; showDay: boolean; onChanged: () => void; onOpen: () => void }) {
-  const [editing, setEditing] = useState(false);
-  const [title, setTitle] = useState(task.titulo);
+function Card({ task, showDay, onChanged, onOpen, suppressClick }: { task: Task; showDay: boolean; onChanged: () => void; onOpen: () => void; suppressClick: () => boolean }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id });
 
-  async function save() {
-    const t = title.trim();
-    setEditing(false);
-    if (t && t !== task.titulo) {
-      await api.updateTask(task.id, { titulo: t });
-      onChanged();
-    } else {
-      setTitle(task.titulo);
-    }
-  }
-
-  async function remove() {
+  async function remove(e: React.MouseEvent) {
+    e.stopPropagation();
     await api.deleteTask(task.id);
     onChanged();
+  }
+
+  function handleClick() {
+    if (suppressClick()) return;
+    onOpen();
   }
 
   return (
     <div
       ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      onClick={handleClick}
       style={transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined}
-      className={`rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3 transition-colors hover:border-[#141414]/40 ${isDragging ? "opacity-50" : ""}`}
+      className={`cursor-grab touch-pan-y select-none rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-3 transition-colors hover:border-[#141414]/40 active:cursor-grabbing ${isDragging ? "opacity-50" : ""}`}
+      title="Arraste para mover · clique para abrir"
     >
-      <div
-        {...listeners}
-        {...attributes}
-        className="mb-1 flex cursor-grab touch-none select-none items-center gap-2 rounded-[6px] px-1 py-0.5 active:cursor-grabbing"
-        title="Arraste para mover entre Backlog, dias e Feito (ou abra o detalhe para escolher o dia pelo teclado)"
-      >
+      <div className="mb-1 flex items-center gap-2 px-1 py-0.5">
         <GripVertical size={14} className="shrink-0 text-[#141414]/40" aria-hidden="true" />
         {task.categoria && (
           <span className="flex items-center gap-1 rounded-full bg-[#f5f5f5] px-2 py-0.5 text-[11px] font-semibold text-[#141414]" title={categoryLabel(task.categoria)}>
@@ -73,24 +65,10 @@ function Card({ task, showDay, onChanged, onOpen }: { task: Task; showDay: boole
           </span>
         )}
       </div>
-      {editing ? (
-        <input
-          autoFocus
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={save}
-          onKeyDown={(e) => e.key === "Enter" && save()}
-          className="w-full rounded-[8px] border border-[#141414] bg-[#ffffff] px-2 py-1 text-sm text-[#141414] outline-none"
-        />
-      ) : (
-        <p onClick={() => setEditing(true)} className="cursor-text text-sm text-[#141414]" title="Clique para renomear">
-          {task.titulo}
-        </p>
-      )}
-      <div className="mt-2 flex gap-1">
-        <button onClick={onOpen} className="rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-2 py-0.5 text-xs text-[#141414]" title="Abrir detalhe">
-          Abrir
-        </button>
+      <p className="px-1 text-sm text-[#141414]">
+        {task.titulo}
+      </p>
+      <div className="mt-2 flex gap-1 px-1">
         <button onClick={remove} aria-label={`Excluir tarefa ${task.titulo}`} className="ml-auto rounded px-2 py-0.5 text-xs text-[#141414]/40 transition-colors hover:text-red-600" title="Excluir">
           ✕
         </button>
@@ -99,7 +77,7 @@ function Card({ task, showDay, onChanged, onOpen }: { task: Task; showDay: boole
   );
 }
 
-function PlaceColumn({ place, tasks, hint, onChanged, onOpen }: { place: Place; tasks: Task[]; hint?: string; onChanged: () => void; onOpen: (t: Task) => void }) {
+function PlaceColumn({ place, tasks, hint, onChanged, onOpen, suppressClick }: { place: Place; tasks: Task[]; hint?: string; onChanged: () => void; onOpen: (t: Task) => void; suppressClick: () => boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: `place-${place}` });
   return (
     <div ref={setNodeRef} className={`flex min-h-[180px] flex-col overflow-hidden rounded-[16px] border p-3 ${isOver ? "border-[#30a81d] bg-[#ffffff]" : "border-[#d9d9d9] bg-[#ffffff]/70"}`}>
@@ -114,14 +92,14 @@ function PlaceColumn({ place, tasks, hint, onChanged, onOpen }: { place: Place; 
           </div>
         )}
         {tasks.map((t) => (
-          <Card key={t.id} task={t} showDay={place === "backlog" || place === "done"} onChanged={onChanged} onOpen={() => onOpen(t)} />
+          <Card key={t.id} task={t} showDay={place === "backlog" || place === "done"} onChanged={onChanged} onOpen={() => onOpen(t)} suppressClick={suppressClick} />
         ))}
       </div>
     </div>
   );
 }
 
-function TrayStrip({ tasks, onChanged, onOpen }: { tasks: Task[]; onChanged: () => void; onOpen: (t: Task) => void }) {
+function TrayStrip({ tasks, onChanged, onOpen, suppressClick }: { tasks: Task[]; onChanged: () => void; onOpen: (t: Task) => void; suppressClick: () => boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: `place-${TRAY}` });
   return (
     <div ref={setNodeRef} className={`mb-3 rounded-[16px] border border-dashed p-3 ${isOver ? "border-[#30a81d] bg-[#ffffff]" : "border-[#ff8400] bg-[#ffffff]"}`}>
@@ -129,7 +107,7 @@ function TrayStrip({ tasks, onChanged, onOpen }: { tasks: Task[]; onChanged: () 
       <div className="flex gap-2 overflow-x-auto">
         {tasks.map((t) => (
           <div key={t.id} className="w-[240px] shrink-0">
-            <Card task={t} showDay={false} onChanged={onChanged} onOpen={() => onOpen(t)} />
+            <Card task={t} showDay={false} onChanged={onChanged} onOpen={() => onOpen(t)} suppressClick={suppressClick} />
           </div>
         ))}
       </div>
@@ -173,6 +151,10 @@ export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
     return m;
   }, [groups]);
 
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const lastDrop = useRef(0);
+  const suppressClick = () => Date.now() - lastDrop.current < 350;
+
   async function add() {
     const titulo = draft.trim();
     if (!titulo) return;
@@ -184,6 +166,7 @@ export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
   async function handleDragEnd(e: DragEndEvent) {
     const activeId = String(e.active.id);
     if (!e.over) return;
+    lastDrop.current = Date.now();
     const overId = String(e.over.id);
     let dest: Place | null = null;
     let destIndex = 0;
@@ -216,7 +199,7 @@ export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
         </button>
       </div>
       <p className="mb-3 text-sm text-[#141414]/60">
-        A IA preenche o <strong>Backlog</strong>. Arraste pela faixa ⠿ para os dias.
+        A IA preenche o <strong>Backlog</strong>. Arraste o card para os dias, clique para abrir.
       </p>
       {dropError && <p className="mb-2 text-sm text-red-600">{dropError}</p>}
       {usedCats.length > 0 && (
@@ -239,9 +222,9 @@ export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
           ))}
         </div>
       )}
-      <DndContext onDragEnd={handleDragEnd}>
+      <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragCancel={() => { lastDrop.current = Date.now(); }}>
         {groups[TRAY].length > 0 && (
-          <TrayStrip tasks={groups[TRAY]} onChanged={refresh} onOpen={setSelected} />
+          <TrayStrip tasks={groups[TRAY]} onChanged={refresh} onOpen={setSelected} suppressClick={suppressClick} />
         )}
         <div className="mb-4 flex gap-2">
           <input
@@ -258,11 +241,11 @@ export default function BoardView({ board, refresh, onPlanWithAI }: Props) {
           </button>
         </div>
         <div className="grid flex-1 grid-cols-1 content-start gap-3 overflow-y-auto pb-2 sm:grid-cols-2 xl:grid-cols-3">
-          <PlaceColumn place="backlog" tasks={groups.backlog} hint="A IA planeja aqui" onChanged={refresh} onOpen={setSelected} />
+          <PlaceColumn place="backlog" tasks={groups.backlog} hint="A IA planeja aqui" onChanged={refresh} onOpen={setSelected} suppressClick={suppressClick} />
           {DAY_LABELS.map((d) => (
-            <PlaceColumn key={d} place={d as Place} tasks={groups[d as Place]} onChanged={refresh} onOpen={setSelected} />
+            <PlaceColumn key={d} place={d as Place} tasks={groups[d as Place]} onChanged={refresh} onOpen={setSelected} suppressClick={suppressClick} />
           ))}
-          <PlaceColumn place="done" tasks={groups.done} hint="Concluídas" onChanged={refresh} onOpen={setSelected} />
+          <PlaceColumn place="done" tasks={groups.done} hint="Concluídas" onChanged={refresh} onOpen={setSelected} suppressClick={suppressClick} />
         </div>
       </DndContext>
       <TaskDetail task={selected} onClose={() => setSelected(null)} onSaved={refresh} />

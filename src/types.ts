@@ -105,3 +105,24 @@ export interface Metricas {
   notas: { total: number; diarias: number; tarefas: number };
   resumo: string | null;
 }
+
+export interface NotaTarefa {
+  id: string;
+  titulo: string;
+  note_md: string;
+  categoria: string;
+  day_label: string | null;
+  column: Column;
+  updated_at: string;
+}
+
+export interface NotaDiaria {
+  data: string;
+  conteudo: string;
+  updated_at: string;
+}
+
+export interface Notas {
+  tarefas: NotaTarefa[];
+  diarias: NotaDiaria[];
+}

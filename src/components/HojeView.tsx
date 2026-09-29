@@ -64,7 +64,15 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
           </Checkbox.Indicator>
         </Checkbox.Root>
       ) : (
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <button
+            onClick={() => commitNumeric((Number(draft) || 0) - 1)}
+            disabled={(Number(draft) || 0) <= 0}
+            aria-label={`Diminuir ${habit.nome}`}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-[#141414] bg-[#ffffff] text-lg font-bold text-[#141414] transition-colors hover:bg-[#141414] hover:text-[#ffffff] disabled:opacity-30 disabled:hover:bg-[#ffffff] disabled:hover:text-[#141414]"
+          >
+            −
+          </button>
           <input
             type="number"
             min={0}
@@ -73,9 +81,16 @@ function HabitRow({ habit, data, onChanged }: { habit: Habit; data: string; onCh
             onBlur={() => commitNumeric(Number(draft))}
             onKeyDown={(e) => e.key === "Enter" && commitNumeric(Number(draft))}
             aria-label={`Valor de hoje para ${habit.nome}`}
-            className="w-20 rounded-[8px] border border-[#141414] bg-[#ffffff] px-2 py-1 text-center text-sm font-bold tabular-nums text-[#141414] outline-none"
+            className="w-14 rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-1 py-1.5 text-center text-sm font-bold tabular-nums text-[#141414] outline-none transition-colors focus:border-[#141414]"
             title="Valor de hoje"
           />
+          <button
+            onClick={() => commitNumeric((Number(draft) || 0) + 1)}
+            aria-label={`Aumentar ${habit.nome}`}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#141414] text-lg font-bold text-[#ffffff] transition-colors hover:bg-[#2a2a2a]"
+          >
+            +
+          </button>
           {editingUnit ? (
             <form
               className="flex items-center gap-1"

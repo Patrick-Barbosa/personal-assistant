@@ -86,6 +86,20 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/metricas":
                 qs = parse_qs(url.query)
                 return send_json(self, 200, metrics.get_metricas(conn, (qs.get("data") or [""])[0]))
+            if path == "/api/notas":
+                trows = conn.execute(
+                    "SELECT id, titulo, note_md, categoria, day_label, task_column, updated_at FROM tasks "
+                    "WHERE note_md IS NOT NULL AND note_md != '' ORDER BY updated_at DESC"
+                ).fetchall()
+                drows = conn.execute("SELECT data, conteudo, updated_at FROM daily_notes ORDER BY data DESC LIMIT 60").fetchall()
+                return send_json(self, 200, {
+                    "tarefas": [
+                        {"id": r["id"], "titulo": r["titulo"], "note_md": r["note_md"], "categoria": r["categoria"] or "",
+                         "day_label": r["day_label"], "column": r["task_column"], "updated_at": r["updated_at"]}
+                        for r in trows
+                    ],
+                    "diarias": [{"data": r["data"], "conteudo": r["conteudo"], "updated_at": r["updated_at"]} for r in drows],
+                })
             return send_json(self, 404, {"error": f"GET desconhecido: {path}"})
         finally:
             conn.close()

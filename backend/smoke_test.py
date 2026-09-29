@@ -66,6 +66,10 @@ def main() -> int:
         check("place-task", s == 200 and placed["column"] == "doing" and placed["day_label"] == "Seg", str(placed)[:100])
         s, updated = req("PATCH", f"/api/tasks/{tid}", {"titulo": "Smoke Task 2"})
         check("update-task", s == 200 and updated["titulo"] == "Smoke Task 2")
+        s, noted = req("PATCH", f"/api/tasks/{tid}", {"note_md": "# Smoke nota"})
+        check("note-save", s == 200 and noted["note_md"] == "# Smoke nota")
+        s, notas = req("GET", "/api/notas")
+        check("notas", s == 200 and len(notas["tarefas"]) == 1, f"tarefas={len(notas['tarefas']) if s == 200 else '?'}")
         s, hab = req("POST", "/api/habits", {"nome": "Ler", "tipo": "numeric", "unidade": "min", "meta": 20})
         check("create-habit", s == 201 and hab["meta"] == 20, str(hab)[:100])
         hid = hab["id"]

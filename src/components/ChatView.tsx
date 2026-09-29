@@ -3,7 +3,8 @@ import { api } from "../api";
 import type { Message } from "../types";
 
 interface Props {
-  sessionId: string;
+  sessionId: string | null;
+  onCreated: (id: string) => void;
 }
 
 const SUGGESTIONS = [
@@ -17,7 +18,7 @@ function timeOf(iso: string) {
   return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
-export default function ChatView({ sessionId }: Props) {
+export default function ChatView({ sessionId, onCreated }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -25,6 +26,7 @@ export default function ChatView({ sessionId }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const typeTimer = useRef<number | null>(null);
   const [typingId, setTypingId] = useState<number | null>(null);
+  const justCreated = useRef(false);
 
   function stopTyping() {
     if (typeTimer.current !== null) {
@@ -62,9 +64,14 @@ export default function ChatView({ sessionId }: Props) {
   }
 
   useEffect(() => {
+    if (justCreated.current) {
+      justCreated.current = false;
+      return;
+    }
     stopTyping();
     setMessages([]);
     setError("");
+    if (!sessionId) return;
     api
       .getMessages(sessionId)
       .then(setMessages)
@@ -83,9 +90,16 @@ export default function ChatView({ sessionId }: Props) {
     setSending(true);
     setError("");
     const tempId = -Date.now();
-    setMessages((m) => [...m, { id: tempId, session_id: sessionId, role: "user", content, created_at: new Date().toISOString() }]);
+    setMessages((m) => [...m, { id: tempId, session_id: sessionId ?? "draft", role: "user", content, created_at: new Date().toISOString() }]);
     try {
-      const res = await api.sendChat(sessionId, content);
+      let sid = sessionId;
+      if (!sid) {
+        const s = await api.createSession(content.slice(0, 48) || "Nova Conversa");
+        sid = s.id;
+        justCreated.current = true;
+        onCreated(sid);
+      }
+      const res = await api.sendChat(sid, content);
       const full = res.assistant_message.content;
       setMessages((m) => [
         ...m.filter((x) => x.id !== tempId),

@@ -5,8 +5,9 @@ import BoardView from "./components/BoardView";
 import ChatView from "./components/ChatView";
 import HojeView from "./components/HojeView";
 import MetricasView from "./components/MetricasView";
+import NotasView from "./components/NotasView";
 
-type View = "hoje" | "chat" | "board" | "metricas";
+type View = "hoje" | "chat" | "board" | "metricas" | "notas";
 
 const EMPTY_BOARD: Board = { todo: [], doing: [], done: [] };
 
@@ -14,6 +15,7 @@ const TABS: { id: View; label: string }[] = [
   { id: "hoje", label: "Hoje" },
   { id: "chat", label: "Chat" },
   { id: "board", label: "Semana" },
+  { id: "notas", label: "Notas" },
   { id: "metricas", label: "Métricas" },
 ];
 
@@ -43,17 +45,15 @@ export default function App() {
     refreshBoard().catch(() => {});
   }, [refreshSessions, refreshBoard]);
 
-  async function newSession() {
-    if (creating) return;
-    setCreating(true);
-    try {
-      const s = await api.createSession("Nova Conversa");
-      const list = await refreshSessions();
-      setSessions(list);
-      setActiveId(s.id);
-    } finally {
-      setCreating(false);
-    }
+  function newSession() {
+    setActiveId(null);
+    setView("chat");
+  }
+
+  async function handleChatCreated(id: string) {
+    const list = await refreshSessions();
+    setSessions(list);
+    setActiveId(id);
   }
 
   async function planWithAI() {
@@ -97,10 +97,9 @@ export default function App() {
           <>
             <button
               onClick={newSession}
-              disabled={creating}
-              className="flim-nav mx-3 mb-2 rounded-[8px] bg-[#141414] px-3 py-2 text-[#ffffff] disabled:opacity-40"
+              className="flim-nav mx-3 mb-2 rounded-[8px] bg-[#141414] px-3 py-2 text-[#ffffff] transition-colors hover:bg-[#2a2a2a]"
             >
-              {creating ? "Criando…" : "+ Nova conversa"}
+              + Nova conversa
             </button>
             <div className="flex-1 space-y-1 overflow-y-auto px-3 pb-3">
               {sessions.map((s) => (
@@ -137,16 +136,10 @@ export default function App() {
           <HojeView onTasksChanged={refreshBoard} />
         ) : view === "metricas" ? (
           <MetricasView />
+        ) : view === "notas" ? (
+          <NotasView board={board} refresh={refreshBoard} />
         ) : view === "chat" ? (
-          activeId ? (
-            <ChatView key={activeId} sessionId={activeId} />
-          ) : (
-            <div className="flex h-full items-center justify-center">
-              <button onClick={newSession} disabled={creating} className="flim-nav rounded-[8px] bg-[#141414] px-5 py-2.5 text-[#ffffff] disabled:opacity-40">
-                {creating ? "Criando…" : "Criar primeira conversa"}
-              </button>
-            </div>
-          )
+          <ChatView sessionId={activeId} onCreated={handleChatCreated} />
         ) : (
           <BoardView board={board} refresh={refreshBoard} onPlanWithAI={planWithAI} />
         )}
