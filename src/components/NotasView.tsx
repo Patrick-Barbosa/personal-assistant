@@ -5,6 +5,7 @@ import { NotebookPen } from "lucide-react";
 import { api } from "../api";
 import { categoryColor, categoryLabel, type Board, type Category, type NotaDiaria, type NotaTarefa, type Notas, type Task } from "../types";
 import TaskDetail from "./TaskDetail";
+import PageHeader from "./PageHeader";
 
 interface Props {
   board: Board;
@@ -100,15 +101,17 @@ export default function NotasView({ board, refresh }: Props) {
 
   return (
     <div className="flex h-full flex-col p-4">
-      <div className="mb-2 flex items-center gap-2">
-        <div>
-          <p className="flim-nav text-[#141414]/50">Tudo que você escreveu</p>
-          <h1 className="text-[32px] font-bold leading-none text-[#141414]">Notas</h1>
-        </div>
-        <button onClick={newNote} className="flim-nav ml-auto flex items-center gap-1.5 rounded-[8px] bg-[#141414] px-4 py-2 text-[#ffffff] transition-colors hover:bg-[#2a2a2a]">
-          <NotebookPen size={14} aria-hidden="true" /> Nova nota
-        </button>
-      </div>
+      <div className="mx-auto flex min-h-0 w-full max-w-[1200px] flex-1 flex-col">
+      <PageHeader
+        eyebrow="Tudo que você escreveu"
+        title="Notas"
+        className="mb-3"
+        aside={
+          <button onClick={newNote} className="flim-nav flex items-center gap-1.5 rounded-[8px] bg-[#141414] px-4 py-2 text-[#ffffff] transition-colors hover:bg-[#2a2a2a]">
+            <NotebookPen size={14} aria-hidden="true" /> Nova nota
+          </button>
+        }
+      />
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -151,7 +154,7 @@ export default function NotasView({ board, refresh }: Props) {
         </button>
       </div>
       {sugestoes.length > 0 && (
-        <div className="mb-3 rounded-[16px] border border-[#30a81d] bg-[#ffffff] p-3">
+        <div className="mb-3 rounded-[16px] border border-[#141414] bg-[#ffffff] p-3">
           <p className="flim-nav mb-2 text-[#141414]/60">Sugestões da IA — confira antes de aplicar</p>
           <div className="mb-2 space-y-1">
             {sugestoes.map((s) => {
@@ -221,7 +224,7 @@ export default function NotasView({ board, refresh }: Props) {
             <>
               <p className="flim-nav text-[#141414]/50">Nota da tarefa</p>
               <h2 className="mb-2 text-xl font-bold text-[#141414]">{previewTask.titulo}</h2>
-              <div className="text-sm leading-relaxed text-[#141414]">
+              <div className="md-body text-sm leading-relaxed text-[#141414]">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{previewTask.note_md || "(vazia)"}</ReactMarkdown>
               </div>
               <p className="mt-3 text-xs text-[#141414]/40">Edite no detalhe da tarefa.</p>
@@ -232,7 +235,7 @@ export default function NotasView({ board, refresh }: Props) {
               <h2 className="mb-2 text-xl font-bold text-[#141414]">
                 {new Date(selectedDaily.data + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" })}
               </h2>
-              <div className="text-sm leading-relaxed text-[#141414]">
+              <div className="md-body text-sm leading-relaxed text-[#141414]">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{selectedDaily.conteudo || "(vazia)"}</ReactMarkdown>
               </div>
             </>
@@ -240,6 +243,7 @@ export default function NotasView({ board, refresh }: Props) {
             <p className="text-sm text-[#141414]/40">Selecione uma nota para ler.</p>
           )}
         </div>
+      </div>
       </div>
       <TaskDetail task={selectedTask} onClose={() => setSelectedTask(null)} onSaved={() => { refresh(); load(); }} />
     </div>

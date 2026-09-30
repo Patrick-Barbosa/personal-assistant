@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { Mic, MicOff, Volume2, VolumeX } from "lucide-react";
 import { api } from "../api";
@@ -8,6 +9,7 @@ import type { Message, NotaDiaria, NotaTarefa, Task } from "../types";
 interface Props {
   sessionId: string | null;
   onCreated: (id: string) => void;
+  onChanged?: () => void;
 }
 
 interface Ref {
@@ -31,7 +33,7 @@ function speechText(md: string) {
   return md.replace(/```[\s\S]*?```/g, " código ").replace(/[#>*`]/g, "").replace(/\[(.*?)\]\(.*?\)/g, "$1").slice(0, 2000);
 }
 
-export default function ChatView({ sessionId, onCreated }: Props) {
+export default function ChatView({ sessionId, onCreated, onChanged }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -40,8 +42,10 @@ export default function ChatView({ sessionId, onCreated }: Props) {
   const typeTimer = useRef<number | null>(null);
   const [typingId, setTypingId] = useState<number | null>(null);
   const justCreated = useRef(false);
-  const [listening, setListening] = useState(false);
-  const recogRef = useRef<any>(null);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [speakingId, setSpeakingId] = useState<number | null>(null);
   const [refs, setRefs] = useState<Ref[]>([]);
   const [mention, setMention] = useState<{ char: "@" | "#"; query: string; hi: number } | null>(null);
@@ -60,6 +64,20 @@ export default function ChatView({ sessionId, onCreated }: Props) {
   function stopSpeaking() {
     window.speechSynthesis?.cancel();
     setSpeakingId(null);
+  }
+
+  function abortRecording() {
+    const rec = recorderRef.current;
+    recorderRef.current = null;
+    if (rec) rec.onstop = null;
+    try {
+      rec?.stop();
+    } catch {
+      /* já parado */
+    }
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setRecording(false);
   }
 
   function typewriter(id: number, full: string) {
@@ -96,8 +114,7 @@ export default function ChatView({ sessionId, onCreated }: Props) {
     }
     stopTyping();
     stopSpeaking();
-    recogRef.current?.abort?.();
-    setListening(false);
+    abortRecording();
     setMessages([]);
     setRefs([]);
     setMention(null);
@@ -110,6 +127,7 @@ export default function ChatView({ sessionId, onCreated }: Props) {
     return () => {
       stopTyping();
       stopSpeaking();
+      abortRecording();
     };
   }, [sessionId]);
 
@@ -145,6 +163,7 @@ export default function ChatView({ sessionId, onCreated }: Props) {
       ]);
       setSending(false);
       typewriter(res.assistant_message.id, full);
+      onChanged?.();
     } catch (e) {
       setMessages((m) => m.filter((x) => x.id !== tempId));
       setError(String(e instanceof Error ? e.message : e));
@@ -153,28 +172,48 @@ export default function ChatView({ sessionId, onCreated }: Props) {
     }
   }
 
-  function toggleListen() {
-    if (listening) {
-      recogRef.current?.stop?.();
+  async function toggleRecord() {
+    if (transcribing) return;
+    if (recording) {
+      recorderRef.current?.stop();
       return;
     }
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) {
-      setError("Voz não suportada neste navegador (use Chrome ou Edge).");
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setError("Gravação não suportada neste navegador.");
       return;
     }
-    const rec = new SR();
-    rec.lang = "pt-BR";
-    rec.interimResults = false;
-    rec.onresult = (e: any) => {
-      const text = e.results?.[0]?.[0]?.transcript ?? "";
-      if (text) setDraft((d) => (d ? d + " " : "") + text);
-    };
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
-    recogRef.current = rec;
-    setListening(true);
-    rec.start();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      const chunks: BlobPart[] = [];
+      rec.ondataavailable = (e) => {
+        if (e.data.size) chunks.push(e.data);
+      };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        recorderRef.current = null;
+        setRecording(false);
+        const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+        if (!blob.size) return;
+        setTranscribing(true);
+        setError("");
+        try {
+          const text = await api.transcribe(blob);
+          if (text) setDraft((d) => (d ? d + " " : "") + text);
+        } catch (e) {
+          setError(String(e instanceof Error ? e.message : e));
+        } finally {
+          setTranscribing(false);
+        }
+      };
+      recorderRef.current = rec;
+      streamRef.current = stream;
+      rec.start();
+      setRecording(true);
+    } catch {
+      setError("Microfone bloqueado — libere o acesso no navegador e tente de novo.");
+    }
   }
 
   function toggleSpeak(m: Message) {
@@ -283,11 +322,11 @@ export default function ChatView({ sessionId, onCreated }: Props) {
         Com contexto: tarefas, hábitos de hoje e notas. @ tarefa · # nota · 🎙 voz.
       </p>
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-2xl space-y-4 p-4" aria-live="polite">
+        <div className="mx-auto w-full max-w-2xl space-y-4 p-4" aria-live="polite">
           {messages.length === 0 && (
             <div className="py-10 text-center">
               <span className="mx-auto mb-4 inline-block rounded-full border border-[#d9d9d9] bg-[#ffffff] p-2">
-                <img src="/logo.png" alt="Copernico" width={40} height={40} className="h-10 w-10" />
+                <img src="/logo.png" alt="Tiba" width={40} height={40} className="h-10 w-10" />
               </span>
               <h2 className="text-[27px] font-bold leading-tight text-[#141414]">Converse com suas notas</h2>
               <p className="mx-auto mt-2 max-w-md text-[15px] leading-relaxed text-[#141414]/60">
@@ -316,7 +355,9 @@ export default function ChatView({ sessionId, onCreated }: Props) {
                 }`}
               >
                 {m.role === "assistant" && typingId !== m.id ? (
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content || "(…)"}</ReactMarkdown>
+                  <div className="md-body">
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{m.content || "(…)"}</ReactMarkdown>
+                  </div>
                 ) : (
                   <>
                     <span className="whitespace-pre-wrap">{m.content}</span>
@@ -351,8 +392,8 @@ export default function ChatView({ sessionId, onCreated }: Props) {
         </div>
       </div>
       {error && <p className="bg-[#ffffff]/85 px-4 pb-1 text-sm text-red-600">{error}</p>}
-      <div className="relative border-t border-[#d9d9d9] bg-[#ffffff]/85 p-3">
-        <div className="mx-auto max-w-2xl">
+      <div className="relative border-t border-[#d9d9d9] bg-[#ffffff]/85 p-4">
+        <div className="mx-auto w-full max-w-2xl">
           {mention && candidates.length > 0 && (
             <div className="absolute bottom-full left-1/2 mb-1 w-[min(560px,92vw)] -translate-x-1/2 rounded-[16px] border border-[#d9d9d9] bg-[#ffffff] p-1.5">
               {candidates.map((c, i) => (
@@ -370,18 +411,19 @@ export default function ChatView({ sessionId, onCreated }: Props) {
           )}
           <div className="flex gap-2">
             <button
-              onClick={toggleListen}
-              aria-label={listening ? "Parar ditado" : "Ditar mensagem"}
-              title="Ditar (Chrome/Edge)"
-              className={`shrink-0 rounded-[160px] border px-3 transition-colors ${listening ? "animate-pulse border-red-600 bg-red-600 text-[#ffffff]" : "border-[#141414]/25 bg-[#ffffff] text-[#141414] hover:border-[#141414]"}`}
+              onClick={toggleRecord}
+              disabled={transcribing}
+              aria-label={recording ? "Parar gravação" : "Gravar áudio"}
+              title="Gravar áudio (transcrito via Groq)"
+              className={`shrink-0 rounded-[160px] border px-3 transition-colors ${recording ? "animate-pulse border-red-600 bg-red-600 text-[#ffffff]" : "border-[#141414]/25 bg-[#ffffff] text-[#141414] hover:border-[#141414]"} disabled:opacity-40`}
             >
-              {listening ? <MicOff size={16} /> : <Mic size={16} />}
+              {recording ? <MicOff size={16} /> : <Mic size={16} />}
             </button>
             <input
               value={draft}
               onChange={(e) => onDraftChange(e.target.value)}
               onKeyDown={onInputKey}
-              placeholder="PERGUNTE, @TAREFA OU #NOTA…"
+              placeholder={transcribing ? "TRANSCREVENDO ÁUDIO…" : "PERGUNTE, @TAREFA OU #NOTA…"}
               aria-label="Escreva sua mensagem"
               autoComplete="off"
               className="flim-nav min-w-0 flex-1 rounded-[160px] border border-[#141414]/25 bg-[#ffffff] px-5 py-3 text-[#141414] outline-none transition-colors placeholder:text-[#141414]/40 focus:border-[#141414]"

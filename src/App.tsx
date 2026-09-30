@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import { Settings } from "lucide-react";
 import { api } from "./api";
 import type { Board, Session } from "./types";
+import AgentConfig from "./components/AgentConfig";
 import BoardView from "./components/BoardView";
 import ChatView from "./components/ChatView";
 import HojeView from "./components/HojeView";
@@ -25,6 +27,7 @@ export default function App() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [board, setBoard] = useState<Board>(EMPTY_BOARD);
   const [creating, setCreating] = useState(false);
+  const [agentOpen, setAgentOpen] = useState(false);
 
   const refreshSessions = useCallback(async () => {
     const list = await api.listSessions();
@@ -75,9 +78,9 @@ export default function App() {
     <div className="flex h-screen text-[#141414]">
       <aside className="flex w-60 flex-col border-r border-[#d9d9d9] bg-[#ffffff]">
         <div className="flex items-center gap-2 border-b border-[#d9d9d9] p-3">
-          <img src="/logo.png" alt="Copernico" width={28} height={28} className="h-7 w-7" />
-          <span className="flim-nav font-bold">Copernico</span>
-          <span className="ml-auto h-2 w-2 rounded-full bg-[#30a81d]" title="online" />
+          <img src="/logo.png" alt="Tiba" width={28} height={28} className="h-7 w-7" />
+          <span className="flim-nav font-bold">Tiba</span>
+          <span className="ml-auto h-2 w-2 rounded-full bg-[#141414]" title="online" />
         </div>
         <nav className="flex flex-col gap-1 p-3">
           {TABS.map((t) => (
@@ -129,6 +132,15 @@ export default function App() {
             </div>
           </>
         )}
+        <div className="mt-auto border-t border-[#d9d9d9] p-3">
+          <button
+            onClick={() => setAgentOpen(true)}
+            className="flim-nav flex w-full items-center gap-2 rounded-[8px] px-3 py-2 text-left text-[#141414] transition-colors hover:bg-[#e9e9e9]"
+          >
+            <Settings size={16} />
+            Configurar IA
+          </button>
+        </div>
       </aside>
 
       <main className="flex-1 overflow-hidden">
@@ -139,11 +151,12 @@ export default function App() {
         ) : view === "notas" ? (
           <NotasView board={board} refresh={refreshBoard} />
         ) : view === "chat" ? (
-          <ChatView sessionId={activeId} onCreated={handleChatCreated} />
+          <ChatView sessionId={activeId} onCreated={handleChatCreated} onChanged={() => { refreshBoard().catch(() => {}); }} />
         ) : (
           <BoardView board={board} refresh={refreshBoard} onPlanWithAI={planWithAI} />
         )}
       </main>
+      <AgentConfig open={agentOpen} onClose={() => setAgentOpen(false)} />
     </div>
   );
 }

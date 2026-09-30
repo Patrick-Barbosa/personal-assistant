@@ -1,39 +1,40 @@
-# AGENTS.md — Copernico (beginner version)
+# AGENTS.md — Tiba
 
-Web-only personal assistant: chat + kanban board. No Rust, no voice, no vault.
+Solo weekly OS: chat com IA sobre notas + hábitos diários + planejamento semanal + notas .md + métricas. Web only (Vite + Python stdlib). Copy da UI em pt-BR.
 
 ## Stack
-- Backend: Python stdlib only (`backend/*.py`, `http.server` + `sqlite3` + `urllib`). Zero pip deps.
-- Frontend: React 19 + TypeScript + Vite + Tailwind v4 (`src/`, 8 files). UI libs: `@base-ui/react` (Dialog/Checkbox/Switch/Slider), `@dnd-kit/*` (Semana drag todo/doing/done), `recharts` (Métricas), `react-markdown`+`remark-gfm` (task .md), `diff`+`@git-diff-view/*` (AI suggestion diff), `lucide-react` (icons), `date-fns` (Semana/streak).
-- DB: single SQLite file (`cofres/cache.db` via `DB_PATH`). Old DBs keep working — schema is additive (`tasks` table); delete the file for a fully fresh start.
+- Backend: Python stdlib only (`backend/*.py`: `http.server` + `sqlite3` + `urllib`). Zero pip deps. Usa `.venv/bin/python` se existir, senão `python3`.
+- Frontend: React 19 + TS + Vite + Tailwind v4. Headless, estilizado por nós: `@base-ui/react` (Dialog/Checkbox), `@dnd-kit/core` (drag na Semana), `recharts` (Métricas), `react-markdown`+`remark-gfm` (.md), `diff`+`@git-diff-view/*` (diff de sugestão), `lucide-react`, `date-fns`.
+- DB: um SQLite (`cofres/cache.db`, via `DB_PATH`). Schema aditivo — `db.py:_migrate_*` mantém DBs antigos funcionando; apagar o arquivo = recomeço total.
+- Design: `docs/design.md` (Flim: Canvas `#f5f5f5`, Ink `#141414`, radii 8/16/160, sem sombras, monocromático — sem verde).
 
 ## Layout
-- `backend/server.py` — all HTTP routes (chat, sessions, tasks).
-- `backend/kanban.py` — flat board logic (todo/doing/done).
-- `backend/agent.py` — DeepSeek loop + 3 tools (listar/criar/mover tarefa).
-- `backend/db.py` + `backend/schema.sql` — SQLite helper + schema.
-- `backend/config.py` — env vars (`.env`: `DEEPSEEK_API_KEY`).
-- `src/api.ts` — the only place that calls the backend (base URL hardcoded `http://127.0.0.1:8000`). Components never `fetch` directly.
-- `src/types.ts` — shared types (`Session`, `Message`, `Task`, `Board`).
-- `src/App.tsx` — shell: Chat tab + Board tab + session list.
-- `src/components/ChatView.tsx`, `src/components/BoardView.tsx` — the two views.
+- `backend/server.py` — todas as rotas. `backend/kanban.py` — tasks (todo/doing/done + `place_task` p/ dias). `backend/habits.py` — hábitos (máx 10) + `ensure_habit_tasks` (cria/corrige 1 task por hábito/dia). `backend/agent.py` — loop DeepSeek + 6 tools + config da IA (`GET/PATCH /api/agent`: persona, comportamento, temperatura). `backend/audio.py` — STT via Groq Whisper (`POST /api/stt`). `backend/categories.py`, `backend/metrics.py`, `backend/config.py` (env: `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`, `DEEPSEEK_BASE_URL`, `GROQ_API_KEY`, `GROQ_STT_MODEL`, `DB_PATH`, `BACKEND_PORT`; loader `.env` próprio, nunca sobrescreve env real).
+- `src/api.ts` — único lugar que chama o backend (BASE hardcoded `http://127.0.0.1:8000`; se mudar a porta, atualize aqui). Componentes nunca fazem `fetch`.
+- `src/App.tsx` — shell com 5 abas: Hoje, Chat, Semana, Notas, Métricas. Views em `src/components/`: `HojeView`, `ChatView` (mic via Groq STT + leitura nativa), `AgentConfig` (dialog Configurar IA), `BoardView` (Semana), `NotasView`, `MetricasView`, `TaskDetail` (overlay).
+- Notas do usuário ficam no SQLite; `cofres/obsidian/` é dado pessoal externo (só leitura).
 
-## Rules
-1. Keep it beginner-readable: plain functions, no abstractions for one use-case.
-2. New backend route? Add it in `server.py`, expose it in `src/api.ts`, use it from a component.
-3. Never commit `.env`, `*.db`, `node_modules/`, `__pycache__/`. Commit `pnpm-lock.yaml` whenever `package.json` changes.
-4. Copy in pt-BR for all user-facing text.
-5. Tool permissions live in `opencode.json`: `cofres/obsidian/` is read-only, `.env`/`*.db` are unreadable — don't try to open them.
+## Regras
+1. Beginner-readable: funções simples, sem abstração p/ um uso só.
+2. Rota nova? `server.py` → expor em `src/api.ts` → usar no componente.
+3. Nunca commitar: `.env`, `*.db*`, `node_modules/`, `__pycache__/`, `dist/`, `cofres/obsidian/`, `.venv/`. Commite `pnpm-lock.yaml` se `package.json` mudar.
+4. Categoria `habitos` é fixa e herdada por toda task de hábito (`HABIT_CATEGORY` em `habits.py`); usuário não edita. Se excluída, `ensure_habit_tasks` recria no próximo `/api/hoje`.
+5. Permissões em `opencode.json`: `cofres/obsidian/` read-only, `.env`/`*.db` ilegíveis, `rm` negado — não tente abrir nem apagar por esses caminhos.
 
-## Gotchas (learned the hard way)
-- Bare `rm`/`rm -rf` in shell is denied by `opencode.json`. Delete tracked files with `git rm`, untracked with `git clean -fd <path>`.
-- `write`/`edit` do not `git add`. Stage explicitly before every commit.
-- Backend has no hot reload: restart `python3 -m backend.server` after any `backend/*.py` change. Vite hot-reloads frontend automatically.
-- After editing `package.json`, run `pnpm install` before `pnpm build`.
+## Gotchas (custo real)
+- Backend **sem hot reload** e Vite pode servir transform **stale**: página em branco ou comportamento antigo após editar = processos presos. Mate tudo e recomece, depois hard-reload (`Ctrl+Shift+R`):
+  ```sh
+  pkill -f "vite --port 1420"; pkill -f "backend.server"; sleep 1
+  sh start_web.sh   # backend :8000 + Vite :1420, abre o navegador, mata o backend ao sair
+  ```
+  Backend stale também desativa features em silêncio (confira o header `Server:` em `/api/health`).
+- `write`/`edit` não dão `git add`. Deletar rastreado: `git rm`; não rastreado: `git clean -fd <path>`.
+- `package.json` mudou? Rode `pnpm install` antes de `pnpm build`.
+- Smoke test usa DB temporário (`DB_PATH`) na porta 8479 — nunca toca o `cofres/cache.db` real.
 
 ## Verify / run
 ```sh
-python3 backend/smoke_test.py   # backend, temp DB (10 checks)
-pnpm build                      # frontend (tsc + vite)
-sh start_web.sh                 # daily: backend :8000 + Vite :1420
+python3 backend/smoke_test.py   # backend em DB temp (~37 checks)
+pnpm build                      # frontend (tsc + vite; sem lint separado)
+sh start_web.sh                 # dia a dia
 ```

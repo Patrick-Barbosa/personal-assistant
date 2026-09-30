@@ -199,7 +199,7 @@ export default function TaskDetail({ task, onClose, onSaved }: Props) {
               )}
 
               {mode === "previa" && (
-                <div className="min-h-40 rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-4 py-3 text-sm text-[#141414]">
+                <div className="md-body min-h-40 rounded-[8px] border border-[#d9d9d9] bg-[#f5f5f5] px-4 py-3 text-[#141414]">
                   {note.trim() ? (
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{note}</ReactMarkdown>
                   ) : (
@@ -216,7 +216,7 @@ export default function TaskDetail({ task, onClose, onSaved }: Props) {
                     diffParts.map((p, i) => (
                       <span
                         key={i}
-                        className={p.added ? "bg-[#30a81d]/20 text-[#141414]" : p.removed ? "bg-[#ff8400]/20 text-[#141414]" : "text-[#141414]/60"}
+                        className={p.added ? "bg-[#fecc33]/50 text-[#141414]" : p.removed ? "bg-[#ff8400]/20 text-[#141414]" : "text-[#141414]/60"}
                       >
                         {p.value}
                       </span>

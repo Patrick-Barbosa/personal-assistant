@@ -5,6 +5,7 @@ Beginner version: chat sessions + flat kanban board. No vault, no voice, no sear
 Run:  python3 -m backend.server
 Env:  BACKEND_PORT=8000, DB_PATH, DEEPSEEK_API_KEY (see .env.example)
 """
+import base64
 import json
 import re
 import uuid
@@ -12,7 +13,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import agent, categories, config, db, habits, kanban, metrics
+from . import agent, audio, categories, config, db, habits, kanban, metrics
 
 
 def now_iso() -> str:
@@ -141,6 +142,8 @@ class Handler(BaseHTTPRequestHandler):
                 data = (qs.get("data") or [""])[0]
                 habits.ensure_habit_tasks(conn, data)
                 return send_json(self, 200, habits.get_hoje(conn, data))
+            if path == "/api/agent":
+                return send_json(self, 200, agent.get_agent_config(conn))
             if path == "/api/categorias":
                 return send_json(self, 200, categories.list_categories(conn))
             if path == "/api/metricas":
@@ -201,6 +204,19 @@ class Handler(BaseHTTPRequestHandler):
                 um = conn.execute("SELECT * FROM messages WHERE session_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1", (sid,)).fetchone()
                 am = conn.execute("SELECT * FROM messages WHERE session_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 1", (sid,)).fetchone()
                 return send_json(self, 200, {"user_message": message_to_dict(um), "assistant_message": message_to_dict(am), "updated_session_title": new_title})
+            if path == "/api/stt":
+                body = read_json(self)
+                try:
+                    raw = base64.b64decode(body.get("audio_b64") or "", validate=True)
+                except Exception:
+                    return send_json(self, 400, {"error": "audio_b64 inválido"})
+                if not raw:
+                    return send_json(self, 400, {"error": "audio_b64 é obrigatório"})
+                try:
+                    text = audio.transcribe(raw, body.get("mime") or "")
+                except (ValueError, RuntimeError) as e:
+                    return send_json(self, 400, {"error": str(e)})
+                return send_json(self, 200, {"text": text})
             if path == "/api/tasks":
                 body = read_json(self)
                 try:
@@ -280,6 +296,14 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     return send_json(self, 200, kanban.update_task(conn, m.group(1), body))
                 except (ValueError, LookupError) as e:
+                    return send_json(self, 400, {"error": str(e)})
+            if path == "/api/agent":
+                try:
+                    cfg = agent.save_agent_config(conn, body.get("persona"), body.get("behavior"),
+                                                  body.get("temperature", agent.DEFAULT_TEMPERATURE),
+                                                  body.get("about_me", ""))
+                    return send_json(self, 200, cfg)
+                except ValueError as e:
                     return send_json(self, 400, {"error": str(e)})
             m = re.fullmatch(r"/api/habits/([^/]+)", path)
             if m:

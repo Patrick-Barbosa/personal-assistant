@@ -152,12 +152,21 @@ def set_escudos(conn, n: int) -> int:
 
 
 def streak_of(conn, habit_id: str, ref: str = "") -> int:
-    """Streak até ref/today contando feito + dias protegidos. Limitado a 400 dias."""
+    """Sessões planejadas em sequência até ref/today. Dias de descanso não contam nem quebram."""
     from datetime import timedelta
 
+    row = conn.execute("SELECT dias FROM habits WHERE id = ?", (habit_id,)).fetchone()
+    sched: set[str] | None = None
+    if row and "dias" in row.keys() and (row["dias"] or "").strip():
+        valid = {p.strip() for p in row["dias"].split(",")}
+        valid = {p for p in valid if p in ("Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom")}
+        sched = valid or None
     d = datetime.strptime(_check_data(ref), "%Y-%m-%d").date()
     n = 0
     for _ in range(400):
+        if sched is not None and weekday_label(d.isoformat()) not in sched:
+            d -= timedelta(days=1)
+            continue
         r = conn.execute("SELECT feito, protegido FROM habit_checks WHERE habit_id = ? AND data = ?", (habit_id, d.isoformat())).fetchone()
         if not r:
             break

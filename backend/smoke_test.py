@@ -139,10 +139,71 @@ def main() -> int:
             req("DELETE", f"/api/tasks/{t['id']}")
         s, _ = req("DELETE", f"/api/habits/{hc['id']}")
         check("habit-cat-cleanup", s == 200)
+        import datetime as _dt2
+        _labels = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sab", "Dom"]
+        _today2 = _dt2.date.today()
+        _tl = _labels[_today2.weekday()]
+        _tom = _labels[(_today2.weekday() + 1) % 7]
+        s, hs2 = req("POST", "/api/habits", {"nome": "Sched2", "tipo": "binary", "dias": f"{_tl},{_tom}"})
+        check("sched-create", s == 201, str(hs2.get("dias")))
+        s, _ = req("POST", f"/api/habits/{hs2['id']}/check", {"feito": 1})
+        s, met3 = req("GET", "/api/metricas")
+        _mine = [x for x in met3["habitos"] if x["id"] == hs2["id"]][0]
+        _exp_planned = 1 if _today2.weekday() == 6 else 2
+        check("sched-pct", s == 200 and _mine["planned_days"] == _exp_planned and _mine["done_days"] == 1
+              and _mine["pct"] == round(100 / _exp_planned), str((_mine["planned_days"], _mine["pct"])))
+        check("sched-streak", s == 200 and _mine["streak"] == 1, str(_mine["streak"]))
+        s, hn2 = req("POST", "/api/habits", {"nome": "NotToday", "tipo": "binary", "dias": _tom})
+        s, met4 = req("GET", "/api/metricas")
+        check("pendente-schedule", s == 200 and all(p["id"] != hn2["id"] for p in met4["hoje_pendente"]),
+              str([p["nome"] for p in met4["hoje_pendente"]]))
+        _hist = met4["historico"]
+        _hs2 = [x for x in _hist["series"] if x["id"] == hs2["id"]][0]
+        check("historico", s == 200 and len(_hist["semanas"]) == 8 and len(_hist["series"]) == len(met4["habitos"])
+              and _hs2["pct"][-1] == _mine["pct"], str(_hs2["pct"][-2:]))
+        s, _ = req("POST", f"/api/habits/{hn2['id']}/check", {"feito": 1})
+        s, met5 = req("GET", "/api/metricas")
+        _hn = [x for x in met5["habitos"] if x["id"] == hn2["id"]][0]
+        _exp_pct2 = 100 if _today2.weekday() == 6 else 0
+        check("extra-visivel", s == 200 and _hn["extras"] == [_today2.isoformat()] and _hn["pct"] == _exp_pct2,
+              str((_hn["extras"], _hn["pct"])))
+        _past = _today2 - _dt2.timedelta(days=7)
+        _mon = _past - _dt2.timedelta(days=_past.weekday())
+        _wed = (_mon + _dt2.timedelta(days=2)).isoformat()
+        s, hb = req("POST", "/api/habits", {"nome": "Backfill", "tipo": "binary", "dias": "Qua"})
+        s, _ = req("POST", f"/api/habits/{hb['id']}/check", {"data": _wed, "feito": 1})
+        s, metb = req("GET", f"/api/metricas?data={_past.isoformat()}")
+        _b = [x for x in metb["habitos"] if x["id"] == hb["id"]][0]
+        check("backfill-planned", s == 200 and _b["planned_days"] == 1 and _b["done_days"] == 1
+              and _b["pct"] == 100 and _b["extras"] == [], str((_b["planned_days"], _b["pct"], _b["extras"])))
+        check("backfill-streak", s == 200 and _b["streak"] == 1, str(_b["streak"]))
+        s, _ = req("DELETE", f"/api/habits/{hb['id']}")
+        check("backfill-cleanup", s == 200)
+        s, board = req("GET", "/api/board")
+        for _col in ("todo", "doing", "done"):
+            for t in board.get(_col, []):
+                if t.get("habit_id") in (hs2["id"], hn2["id"]):
+                    req("DELETE", f"/api/tasks/{t['id']}")
+        s, _ = req("DELETE", f"/api/habits/{hs2['id']}")
+        check("sched-cleanup", s == 200)
+        s, _ = req("DELETE", f"/api/habits/{hn2['id']}")
+        check("nottoday-cleanup", s == 200)
         s, _ = req("DELETE", f"/api/tasks/{tid}")
         check("delete-task", s == 200)
         s, _ = req("DELETE", f"/api/sessions/{sid}")
         check("delete-session", s == 200)
+        s, bad = req("POST", "/api/stt", {})
+        check("stt-requires-audio", s == 400, str(bad)[:80])
+        s, bad = req("POST", "/api/stt", {"audio_b64": "!!!"})
+        check("stt-rejects-bad-b64", s == 400, str(bad)[:80])
+        s, cfg = req("GET", "/api/agent")
+        check("agent-defaults", s == 200 and cfg["temperature"] == 0.7 and cfg["persona"] == "", str(cfg)[:80])
+        s, cfg = req("PATCH", "/api/agent", {"persona": "Direto", "behavior": "Respostas curtas", "temperature": 0.2})
+        check("agent-save", s == 200 and cfg["persona"] == "Direto" and cfg["temperature"] == 0.2, str(cfg)[:80])
+        s, cfg = req("PATCH", "/api/agent", {"persona": "", "behavior": "", "temperature": 9})
+        check("agent-clamp", s == 200 and cfg["temperature"] == 2.0, str(cfg)[:80])
+        s, bad = req("PATCH", "/api/agent", {"temperature": "quente"})
+        check("agent-bad-temp", s == 400, str(bad)[:80])
     finally:
         proc.terminate()
     print(f"\n{len(failures)} falhas: {failures}" if failures else "\nSMOKE OK — tudo verde")

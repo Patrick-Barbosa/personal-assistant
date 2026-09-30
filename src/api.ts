@@ -34,6 +34,16 @@ export const api = {
       { session_id: sessionId, content, refs },
     ),
 
+  transcribe: (blob: Blob) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+      reader.onerror = () => reject(new Error("Falha ao ler áudio"));
+      reader.readAsDataURL(blob);
+    }).then((audio_b64) =>
+      request<{ text: string }>("POST", "/api/stt", { audio_b64, mime: blob.type }).then((r) => r.text),
+    ),
+
   getBoard: () => request<Board>("GET", "/api/board"),
   createTask: (titulo: string, column: Column = "todo") => request<Task>("POST", "/api/tasks", { titulo, column }),
   moveTask: (id: string, column: Column, index: number) =>
@@ -63,4 +73,8 @@ export const api = {
   getMetricas: (data?: string) => request<Metricas>("GET", data ? `/api/metricas?data=${data}` : "/api/metricas"),
   resumoSemana: (data?: string) => request<{ resumo: string }>("POST", "/api/metricas/resumo", { data }),
   getNotas: () => request<Notas>("GET", "/api/notas"),
+
+  getAgent: () => request<{ persona: string; behavior: string; about_me: string; temperature: number }>("GET", "/api/agent"),
+  saveAgent: (cfg: { persona: string; behavior: string; about_me: string; temperature: number }) =>
+    request<{ persona: string; behavior: string; about_me: string; temperature: number }>("PATCH", "/api/agent", cfg),
 };

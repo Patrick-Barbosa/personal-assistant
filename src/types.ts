@@ -110,15 +110,24 @@ export interface MetricaHabito {
   pct: number;
   streak: number;
   done_days: number;
+  planned_days: number;
   dias: boolean[];
+  planejados: boolean[];
+  extras: string[];
   marco: number | null;
   protegidas: string[];
+}
+
+export interface Historico {
+  semanas: { inicio: string; fim: string; rotulo: string }[];
+  series: { id: string; nome: string; pct: (number | null)[] }[];
 }
 
 export interface Metricas {
   semana: { inicio: string; fim: string };
   habitos: MetricaHabito[];
   serie: { data: string; feitos: number }[];
+  historico: Historico;
   geral: { media_pct: number; cheios: number };
   tarefas: { criadas: number; concluidas: number; carregadas: number; pct: number };
   notas: { total: number; diarias: number; tarefas: number };

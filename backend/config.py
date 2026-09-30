@@ -42,4 +42,8 @@ DEEPSEEK_API_KEY = (os.getenv("DEEPSEEK_API_KEY") or "").strip()
 DEEPSEEK_BASE_URL = (os.getenv("DEEPSEEK_BASE_URL") or "https://api.deepseek.com").strip()
 DEEPSEEK_MODEL = (os.getenv("DEEPSEEK_MODEL") or "deepseek-chat").strip()
 
+GROQ_API_KEY = (os.getenv("GROQ_API_KEY") or "").strip()
+GROQ_BASE_URL = (os.getenv("GROQ_BASE_URL") or "https://api.groq.com/openai/v1").strip()
+GROQ_STT_MODEL = (os.getenv("GROQ_STT_MODEL") or "whisper-large-v3-turbo").strip()
+
 BACKEND_PORT = int(os.getenv("BACKEND_PORT") or "8000")

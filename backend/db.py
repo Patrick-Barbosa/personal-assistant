@@ -1,5 +1,6 @@
 """SQLite helper: stdlib only, WAL + foreign_keys, schema.sql bootstrap."""
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 from . import config
@@ -56,10 +57,19 @@ def _migrate_tasks(conn) -> None:
 def _seed_categories(conn) -> None:
     conn.execute("CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY, nome TEXT NOT NULL, cor TEXT NOT NULL DEFAULT '#141414')")
     if conn.execute("SELECT COUNT(*) AS c FROM categories").fetchone()["c"] == 0:
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(categories)").fetchall()}
+        now = datetime.now().isoformat(timespec="seconds")
         presets = [("trabalho", "Trabalho", "#141414"), ("estudo", "Estudo", "#5c5c5c"), ("pessoal", "Pessoal", "#ff8400"),
                    ("saude", "Saúde", "#8a8a8a"), ("ideia", "Ideia", "#fecc33"), ("habitos", "Hábitos", "#141414")]
         for cid, nome, cor in presets:
-            conn.execute("INSERT OR IGNORE INTO categories (id, nome, cor) VALUES (?, ?, ?)", (cid, nome, cor))
+            if "created_at" in cols and "updated_at" in cols:
+                conn.execute("INSERT OR IGNORE INTO categories (id, nome, cor, created_at, updated_at) VALUES (?, ?, ?, ?, ?)", (cid, nome, cor, now, now))
+            elif "created_at" in cols:
+                conn.execute("INSERT OR IGNORE INTO categories (id, nome, cor, created_at) VALUES (?, ?, ?, ?)", (cid, nome, cor, now))
+            elif "updated_at" in cols:
+                conn.execute("INSERT OR IGNORE INTO categories (id, nome, cor, updated_at) VALUES (?, ?, ?, ?)", (cid, nome, cor, now))
+            else:
+                conn.execute("INSERT OR IGNORE INTO categories (id, nome, cor) VALUES (?, ?, ?)", (cid, nome, cor))
 
 
 def _migrate_habits_legacy(conn) -> None:
